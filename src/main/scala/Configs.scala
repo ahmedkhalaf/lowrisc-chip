@@ -16,6 +16,7 @@ case object UseUART extends Field[Boolean]
 case object UseSPI extends Field[Boolean]
 case object UseEth extends Field[Boolean]
 case object UseBootRAM extends Field[Boolean]
+case object UseDMA extends Field[Boolean]
 case object UseFlash extends Field[Boolean]
 case object RAMSize extends Field[BigInt]
 case object IOTagBits extends Field[Int]
@@ -59,6 +60,10 @@ class BaseConfig extends Config (
       if (site(UseEth)) {
         entries += AddrMapEntry("eth", MemSize(1<<13, 1<<13, MemAttr(AddrMapProt.RW)))
         Dump("ADD_ETH", true)
+      }
+      if (site(UseDMA)) {
+        entries += AddrMapEntry("dma", MemSize(1<<12, 1<<13, MemAttr(AddrMapProt.RW)))
+        Dump("ADD_DMA", true)
       }
       new AddrMap(entries)
     }
@@ -106,6 +111,11 @@ class BaseConfig extends Config (
       if(site(UseEth)) {
         res append  "eth {\n"
         res append s"  addr 0x${addrMap("io:ext:eth").start.toString(16)};\n"
+        res append  "};\n"
+      }
+      if(site(UseDMA)) {
+        res append  "dma {\n"
+        res append s"  addr 0x${addrMap("io:ext:dma").start.toString(16)};\n"
         res append  "};\n"
       }
       res append  "ram {\n"
@@ -265,7 +275,7 @@ class BaseConfig extends Config (
           coherencePolicy = new MESICoherence(site(L2DirectoryRepresentation)),
           nManagers = site(NBanks) + 1,
           nCachingClients = site(NTiles),
-          nCachelessClients = if(site(UseDebug)) site(NTiles) + 1 else site(NTiles),
+          nCachelessClients = (if(site(UseDebug)) 1 else 0) + (if(site(UseDMA)) 1 else 0) + site(NTiles),
           maxClientXacts = site(NMSHRs) + 1,
           maxClientsPerPort = 1,
           maxManagerXacts = site(NAcquireTransactors) + 2, // acquire, release, writeback
@@ -338,6 +348,7 @@ class BaseConfig extends Config (
       case UseUART => false
       case UseSPI => false
       case UseEth => false
+      case UseDMA => false
       case UseBootRAM => false
       case UseFlash => false
 
@@ -431,6 +442,12 @@ class WithEthConfig extends Config (
   }
 )
 
+class WithDMAConfig extends Config (
+  (pname,site,here) => pname match {
+    case UseDMA => true
+  }
+)
+
 class WithUARTConfig extends Config (
   (pname,site,here) => pname match {
     case UseUART => true
@@ -478,7 +495,7 @@ class FPGADebugConfig extends
     Config(new WithDebugConfig ++ new BasicFPGAConfig)
 
 class FPGAEthConfig extends
-    Config(new WithEthConfig ++ new FPGAConfig)
+    Config(new WithDMAConfig ++ new WithEthConfig ++ new FPGAConfig)
 
 class Nexys4Config extends
     Config(new With128MRamConfig ++ new FPGAConfig)

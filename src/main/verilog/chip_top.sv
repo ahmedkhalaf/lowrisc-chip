@@ -165,6 +165,16 @@ module chip_top
         .DATA_WIDTH  ( `ROCKET_MEM_DAT_WIDTH ))
     mem_nasti();
 
+`ifdef ADD_DMA
+    // Rocket DMA external master bus
+    nasti_channel
+     #(
+        .ID_WIDTH    ( `ROCKET_MEM_TAG_WIDTH ),
+        .ADDR_WIDTH  ( `ROCKET_PADDR_WIDTH   ),
+        .DATA_WIDTH  ( `ROCKET_MEM_DAT_WIDTH ))
+    dma_nasti();
+`endif
+
 `ifdef ADD_PHY_DDR
 
     // the NASTI bus for off-FPGA DRAM, converted to High frequency
@@ -1021,9 +1031,78 @@ reg phy_emdio_i, io_emdio_o, io_emdio_t;
 `endif // !`ifdef ADD_ETH
 
    /////////////////////////////////////////////////////////////
+   // DMA
+   nasti_channel
+     #(
+       .ADDR_WIDTH  ( `ROCKET_PADDR_WIDTH       ),
+       .DATA_WIDTH  ( `LOWRISC_IO_DAT_WIDTH     ))
+   io_dma_lite();
+   logic                       dma_irq;
+
+`ifdef ADD_DMA
+axi_cdma_0 axi_central_dma (
+  .m_axi_aclk           ( clk                  ),                  // input wire m_axi_aclk
+  .s_axi_lite_aclk      ( clk                  ),
+  .s_axi_lite_aresetn   ( rstn                 ),
+  .s_axi_lite_araddr    ( io_dma_lite.ar_addr  ),
+  .s_axi_lite_arready   ( io_dma_lite.ar_ready ),
+  .s_axi_lite_arvalid   ( io_dma_lite.ar_valid ),
+  .s_axi_lite_awaddr    ( io_dma_lite.aw_addr  ),
+  .s_axi_lite_awready   ( io_dma_lite.aw_ready ),
+  .s_axi_lite_awvalid   ( io_dma_lite.aw_valid ),
+  .s_axi_lite_bready    ( io_dma_lite.b_ready  ),
+  .s_axi_lite_bresp     ( io_dma_lite.b_resp   ),
+  .s_axi_lite_bvalid    ( io_dma_lite.b_valid  ),
+  .s_axi_lite_rdata     ( io_dma_lite.r_data   ),
+  .s_axi_lite_rready    ( io_dma_lite.r_ready  ),
+  .s_axi_lite_rresp     ( io_dma_lite.r_resp   ),
+  .s_axi_lite_rvalid    ( io_dma_lite.r_valid  ),
+  .s_axi_lite_wdata     ( io_dma_lite.w_data   ),
+  .s_axi_lite_wready    ( io_dma_lite.w_ready  ),
+  .s_axi_lite_wvalid    ( io_dma_lite.w_valid  ),
+  .cdma_introut         ( dma_irq              ),              // output wire cdma_introut
+  .m_axi_arready(dma_nasti.ar_ready),            // input wire m_axi_arready
+  .m_axi_arvalid(dma_nasti.ar_valid),            // output wire m_axi_arvalid
+  .m_axi_araddr(dma_nasti.ar_addr),              // output wire [31 : 0] m_axi_araddr
+  .m_axi_arlen(dma_nasti.ar_len),                // output wire [7 : 0] m_axi_arlen
+  .m_axi_arsize(dma_nasti.ar_size),              // output wire [2 : 0] m_axi_arsize
+  .m_axi_arburst(dma_nasti.ar_burst),            // output wire [1 : 0] m_axi_arburst
+  .m_axi_arprot(dma_nasti.ar_prot),              // output wire [2 : 0] m_axi_arprot
+  .m_axi_arcache(dma_nasti.ar_cache),            // output wire [3 : 0] m_axi_arcache
+  .m_axi_rready(dma_nasti.r_ready),              // output wire m_axi_rready
+  .m_axi_rvalid(dma_nasti.r_valid),              // input wire m_axi_rvalid
+  .m_axi_rdata(dma_nasti.r_data),                // input wire [31 : 0] m_axi_rdata
+  .m_axi_rresp(dma_nasti.r_resp),                // input wire [1 : 0] m_axi_rresp
+  .m_axi_rlast(dma_nasti.r_last),                // input wire m_axi_rlast
+  .m_axi_awready(dma_nasti.aw_ready),            // input wire m_axi_awready
+  .m_axi_awvalid(dma_nasti.aw_valid),            // output wire m_axi_awvalid
+  .m_axi_awaddr(dma_nasti.aw_addr),              // output wire [31 : 0] m_axi_awaddr
+  .m_axi_awlen(dma_nasti.aw_len),                // output wire [7 : 0] m_axi_awlen
+  .m_axi_awsize(dma_nasti.aw_size),              // output wire [2 : 0] m_axi_awsize
+  .m_axi_awburst(dma_nasti.aw_burst),            // output wire [1 : 0] m_axi_awburst
+  .m_axi_awprot(dma_nasti.aw_prot),              // output wire [2 : 0] m_axi_awprot
+  .m_axi_awcache(dma_nasti.aw_cache),            // output wire [3 : 0] m_axi_awcache
+  .m_axi_wready(dma_nasti.w_ready),              // input wire m_axi_wready
+  .m_axi_wvalid(dma_nasti.w_valid),              // output wire m_axi_wvalid
+  .m_axi_wdata(dma_nasti.w_data),                // output wire [31 : 0] m_axi_wdata
+  .m_axi_wstrb(dma_nasti.w_strb),                // output wire [3 : 0] m_axi_wstrb
+  .m_axi_wlast(dma_nasti.w_last),                // output wire m_axi_wlast
+  .m_axi_bready(dma_nasti.b_ready),              // output wire m_axi_bready
+  .m_axi_bvalid(dma_nasti.b_valid),              // input wire m_axi_bvalid
+  .m_axi_bresp(dma_nasti.b_resp),                // input wire [1 : 0] m_axi_bresp
+  .cdma_tvect_out(cdma_tvect_out)          // output wire [31 : 0] cdma_tvect_out
+);
+
+`else // !`ifdef ADD_DMA
+
+   assign dma_irq = 1'b0;
+
+`endif // !`ifdef ADD_DMA
+
+   /////////////////////////////////////////////////////////////
    // IO crossbar
 
-   localparam NUM_DEVICE = 4;
+   localparam NUM_DEVICE = 5;
 
    // output of the IO crossbar
    nasti_channel
@@ -1033,7 +1112,7 @@ reg phy_emdio_i, io_emdio_o, io_emdio_t;
        .DATA_WIDTH  ( `LOWRISC_IO_DAT_WIDTH     ))
    io_cbo_lite();
 
-   nasti_channel ios_dmm4(), ios_dmm5(), ios_dmm6(), ios_dmm7(); // dummy channels
+   nasti_channel ios_dmm5(), ios_dmm6(), ios_dmm7(); // dummy channels
 
    nasti_channel_slicer #(NUM_DEVICE)
    io_slicer (
@@ -1042,7 +1121,7 @@ reg phy_emdio_i, io_emdio_o, io_emdio_t;
               .slave_1  ( io_uart_lite  ),
               .slave_2  ( io_spi_lite   ),
               .slave_3  ( io_eth_lite   ),
-              .slave_4  ( ios_dmm4      ),
+              .slave_4  ( io_dma_lite   ),
               .slave_5  ( ios_dmm5      ),
               .slave_6  ( ios_dmm6      ),
               .slave_7  ( ios_dmm7      )
@@ -1086,6 +1165,11 @@ reg phy_emdio_i, io_emdio_o, io_emdio_t;
  `ifdef ADD_ETH
    defparam io_crossbar.BASE3 = `DEV_MAP__io_ext_eth__BASE;
    defparam io_crossbar.MASK3 = `DEV_MAP__io_ext_eth__MASK;
+ `endif
+
+ `ifdef ADD_DMA
+   defparam io_crossbar.BASE4 = `DEV_MAP__io_ext_dma__BASE;
+   defparam io_crossbar.MASK4 = `DEV_MAP__io_ext_dma__MASK;
  `endif
 
    /////////////////////////////////////////////////////////////
@@ -1139,6 +1223,52 @@ reg phy_emdio_i, io_emdio_o, io_emdio_t;
       .io_nasti_mem_r_bits_resp      ( mem_nasti.r_resp                       ),
       .io_nasti_mem_r_bits_last      ( mem_nasti.r_last                       ),
       .io_nasti_mem_r_bits_user      ( mem_nasti.r_user                       ),
+ `ifdef ADD_DMA
+      .io_nasti_dma_aw_valid       ( dma_nasti.aw_valid   ),
+      .io_nasti_dma_aw_ready       ( dma_nasti.aw_ready   ),
+      .io_nasti_dma_aw_bits_id     ( dma_nasti.aw_id      ),
+      .io_nasti_dma_aw_bits_addr   ( dma_nasti.aw_addr    ),
+      .io_nasti_dma_aw_bits_len    ( dma_nasti.aw_len     ),
+      .io_nasti_dma_aw_bits_size   ( dma_nasti.aw_size    ),
+      .io_nasti_dma_aw_bits_burst  ( dma_nasti.aw_burst   ),
+      .io_nasti_dma_aw_bits_lock   ( dma_nasti.aw_lock    ),
+      .io_nasti_dma_aw_bits_cache  ( dma_nasti.aw_cache   ),
+      .io_nasti_dma_aw_bits_prot   ( dma_nasti.aw_prot    ),
+      .io_nasti_dma_aw_bits_qos    ( dma_nasti.aw_qos     ),
+      .io_nasti_dma_aw_bits_region ( dma_nasti.aw_region  ),
+      .io_nasti_dma_aw_bits_user   ( dma_nasti.aw_user    ),
+      .io_nasti_dma_w_valid        ( dma_nasti.w_valid    ),
+      .io_nasti_dma_w_ready        ( dma_nasti.w_ready    ),
+      .io_nasti_dma_w_bits_data    ( dma_nasti.w_data     ),
+      .io_nasti_dma_w_bits_strb    ( dma_nasti.w_strb     ),
+      .io_nasti_dma_w_bits_last    ( dma_nasti.w_last     ),
+      .io_nasti_dma_w_bits_user    ( dma_nasti.w_user     ),
+      .io_nasti_dma_b_valid        ( dma_nasti.b_valid    ),
+      .io_nasti_dma_b_ready        ( dma_nasti.b_ready    ),
+      .io_nasti_dma_b_bits_id      ( dma_nasti.b_id       ),
+      .io_nasti_dma_b_bits_resp    ( dma_nasti.b_resp     ),
+      .io_nasti_dma_b_bits_user    ( dma_nasti.b_user     ),
+      .io_nasti_dma_ar_valid       ( dma_nasti.ar_valid   ),
+      .io_nasti_dma_ar_ready       ( dma_nasti.ar_ready   ),
+      .io_nasti_dma_ar_bits_id     ( dma_nasti.ar_id      ),
+      .io_nasti_dma_ar_bits_addr   ( dma_nasti.ar_addr    ),
+      .io_nasti_dma_ar_bits_len    ( dma_nasti.ar_len     ),
+      .io_nasti_dma_ar_bits_size   ( dma_nasti.ar_size    ),
+      .io_nasti_dma_ar_bits_burst  ( dma_nasti.ar_burst   ),
+      .io_nasti_dma_ar_bits_lock   ( dma_nasti.ar_lock    ),
+      .io_nasti_dma_ar_bits_cache  ( dma_nasti.ar_cache   ),
+      .io_nasti_dma_ar_bits_prot   ( dma_nasti.ar_prot    ),
+      .io_nasti_dma_ar_bits_qos    ( dma_nasti.ar_qos     ),
+      .io_nasti_dma_ar_bits_region ( dma_nasti.ar_region  ),
+      .io_nasti_dma_ar_bits_user   ( dma_nasti.ar_user    ),
+      .io_nasti_dma_r_valid        ( dma_nasti.r_valid    ),
+      .io_nasti_dma_r_ready        ( dma_nasti.r_ready    ),
+      .io_nasti_dma_r_bits_id      ( dma_nasti.r_id       ),
+      .io_nasti_dma_r_bits_data    ( dma_nasti.r_data     ),
+      .io_nasti_dma_r_bits_resp    ( dma_nasti.r_resp     ),
+      .io_nasti_dma_r_bits_last    ( dma_nasti.r_last     ),
+      .io_nasti_dma_r_bits_user    ( dma_nasti.r_user     ),
+ `endif
       .io_nasti_io_aw_valid          ( io_nasti.aw_valid                      ),
       .io_nasti_io_aw_ready          ( io_nasti.aw_ready                      ),
       .io_nasti_io_aw_bits_id        ( io_nasti.aw_id                         ),

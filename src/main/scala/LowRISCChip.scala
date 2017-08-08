@@ -41,6 +41,7 @@ trait HasTopLevelParameters {
 class TopIO(implicit val p: Parameters) extends ParameterizedBundle()(p) with HasTopLevelParameters {
   val nasti_mem   = new NastiIO()(p.alterPartial({case BusId => "mem"}))
   val nasti_io    = new NastiIO()(p.alterPartial({case BusId => "io"}))
+  val nasti_dma   = new NastiIO()(p.alterPartial({case BusId => "mem"})).flip
   val interrupt   = UInt(INPUT, p(XLen))
   val debug_mam   = (new MamIO).flip
   val cpu_rst     = Bool(INPUT)
@@ -99,7 +100,7 @@ class Top(topParams: Parameters) extends Module with HasTopLevelParameters {
   // local partial parameter overrides
 
   val rocketParams = p.alterPartial({ case TLId => l1tol2TLId })
-  val coherentNetParams = p.alterPartial({ case TLId => l1tol2TLId })
+  val coherentNetParams = p.alterPartial({ case TLId => l1tol2TLId; case BusId => memBusId })
   val tagCacheParams = p.alterPartial({ case TLId => l2totcTLId; case CacheName => tagCacheId })
   val tagNetParams = p.alterPartial({ case TLId => l2totcTLId })
   val ioManagerParams = p.alterPartial({ case TLId => l2toioTLId })
@@ -136,12 +137,23 @@ class Top(topParams: Parameters) extends Module with HasTopLevelParameters {
   val mem_net = Module(new PortedTileLinkCrossbar(addrToBank, sharerToClientId, preBuffering)(coherentNetParams))
 
   mem_net.io.clients_cached <> tileList.map(_.io.cached).flatten
+
+  var uncached_clients = tileList.map(_.io.uncached).flatten
+
+  // External AXI DMA Master
+  if(p(UseDMA)) {
+    val dma_axi = Module(new TileLinkIONastiIOConverter()(coherentNetParams))
+    dma_axi.io.nasti <> io.nasti_dma
+    uncached_clients :+= dma_axi.io.tl
+  }
+
   if(p(UseDebug)) {
     val debug_mam = Module(new TileLinkIOMamIOConverter()(coherentNetParams))
     debug_mam.io.mam <> io.debug_mam
-    mem_net.io.clients_uncached <> tileList.map(_.io.uncached).flatten :+ debug_mam.io.tl
-  } else
-    mem_net.io.clients_uncached <> tileList.map(_.io.uncached).flatten
+    uncached_clients :+= debug_mam.io.tl
+  }
+
+  mem_net.io.clients_uncached <> uncached_clients
 
   ////////////////////////////////////////////
   // L2 cache coherence managers
