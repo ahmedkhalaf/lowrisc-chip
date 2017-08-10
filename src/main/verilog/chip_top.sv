@@ -134,6 +134,8 @@ module chip_top
  output wire        o_emdc ,
  inout wire         io_emdio ,
  output wire        o_erstn ,
+ output reg [15:0]  o_led ,
+ input wire [15:0]  i_dip ,
 `endif //  `ifdef ADD_ETH
  
     // clock and reset
@@ -961,13 +963,15 @@ module chip_top
        .ADDR_WIDTH  ( `ROCKET_PADDR_WIDTH       ),
        .DATA_WIDTH  ( `LOWRISC_IO_DAT_WIDTH     ))
    io_eth_lite();
-   logic                       eth_irq;
+   logic                       eth_irq, phy_irq;
 
 `ifdef ADD_ETH
 
+   assign phy_irq = (i_emdint == 1'b0);
+   
 wire io_emdio_i, phy_emdio_o, phy_emdio_t;
 reg phy_emdio_i, io_emdio_o, io_emdio_t;
-   
+
   always @(posedge clk_rmii)
     begin
     phy_emdio_i <= io_emdio_i;
@@ -1022,11 +1026,13 @@ reg phy_emdio_i, io_emdio_o, io_emdio_t;
       .s_axi_wdata     ( io_eth_lite.w_data   ),
       .s_axi_wready    ( io_eth_lite.w_ready  ),
       .s_axi_wstrb     ( io_eth_lite.w_strb   ),
-      .s_axi_wvalid    ( io_eth_lite.w_valid  ));
+      .s_axi_wvalid    ( io_eth_lite.w_valid  ),
+      .ip2intc_irpt    ( eth_irq ));
 
 `else // !`ifdef ADD_ETH
 
    assign eth_irq = 1'b0;
+   assign phy_irq = 1'b0;
 
 `endif // !`ifdef ADD_ETH
 
@@ -1040,6 +1046,9 @@ reg phy_emdio_i, io_emdio_o, io_emdio_t;
    logic                       dma_irq;
 
 `ifdef ADD_DMA
+
+    logic [31:0] cdma_tvect_out;
+    
 axi_cdma_0 axi_central_dma (
   .m_axi_aclk           ( clk                  ),                  // input wire m_axi_aclk
   .s_axi_lite_aclk      ( clk                  ),
@@ -1100,9 +1109,96 @@ axi_cdma_0 axi_central_dma (
 `endif // !`ifdef ADD_DMA
 
    /////////////////////////////////////////////////////////////
+   // GPIO
+   nasti_channel
+     #(
+       .ADDR_WIDTH  ( `ROCKET_PADDR_WIDTH       ),
+       .DATA_WIDTH  ( `LOWRISC_IO_DAT_WIDTH     ))
+   io_gpio_lite();
+   logic                       gpio_irq;
+
+`ifdef ADD_GPIO
+
+axi_gpio_0 gpio_inst (
+  .s_axi_aclk      ( clk                   ),
+  .s_axi_aresetn   ( rstn                  ),
+  .s_axi_araddr    ( io_gpio_lite.ar_addr  ),
+  .s_axi_arready   ( io_gpio_lite.ar_ready ),
+  .s_axi_arvalid   ( io_gpio_lite.ar_valid ),
+  .s_axi_awaddr    ( io_gpio_lite.aw_addr  ),
+  .s_axi_awready   ( io_gpio_lite.aw_ready ),
+  .s_axi_awvalid   ( io_gpio_lite.aw_valid ),
+  .s_axi_bready    ( io_gpio_lite.b_ready  ),
+  .s_axi_bresp     ( io_gpio_lite.b_resp   ),
+  .s_axi_bvalid    ( io_gpio_lite.b_valid  ),
+  .s_axi_rdata     ( io_gpio_lite.r_data   ),
+  .s_axi_rready    ( io_gpio_lite.r_ready  ),
+  .s_axi_rresp     ( io_gpio_lite.r_resp   ),
+  .s_axi_rvalid    ( io_gpio_lite.r_valid  ),
+  .s_axi_wdata     ( io_gpio_lite.w_data   ),
+  .s_axi_wready    ( io_gpio_lite.w_ready  ),
+  .s_axi_wvalid    ( io_gpio_lite.w_valid  ),
+  .s_axi_wstrb     ( io_gpio_lite.w_strb   ),
+  .ip2intc_irpt    ( gpio_irq              ),    // output wire ip2intc_irpt
+  .gpio_io_i       ( i_dip                 ),    // input wire [15 : 0] gpio_io_i
+  .gpio2_io_o      ( o_led                 )     // output wire [15 : 0] gpio2_io_o
+);
+
+`else // !`ifdef ADD_GPIO
+
+   assign gpio_irq = 1'b0;
+
+`endif // !`ifdef ADD_GPIO
+
+   /////////////////////////////////////////////////////////////
+   // INTC
+   nasti_channel
+     #(
+       .ADDR_WIDTH  ( `ROCKET_PADDR_WIDTH       ),
+       .DATA_WIDTH  ( `LOWRISC_IO_DAT_WIDTH     ))
+   io_intc_lite();
+
+`ifdef ADD_INTC
+
+   logic                       intc_irq;
+
+axi_intc_0 intc_inst (
+  .s_axi_aclk      ( clk                   ),
+  .s_axi_aresetn   ( rstn                  ),
+  .s_axi_araddr    ( io_intc_lite.ar_addr  ),
+  .s_axi_arready   ( io_intc_lite.ar_ready ),
+  .s_axi_arvalid   ( io_intc_lite.ar_valid ),
+  .s_axi_awaddr    ( io_intc_lite.aw_addr  ),
+  .s_axi_awready   ( io_intc_lite.aw_ready ),
+  .s_axi_awvalid   ( io_intc_lite.aw_valid ),
+  .s_axi_bready    ( io_intc_lite.b_ready  ),
+  .s_axi_bresp     ( io_intc_lite.b_resp   ),
+  .s_axi_bvalid    ( io_intc_lite.b_valid  ),
+  .s_axi_rdata     ( io_intc_lite.r_data   ),
+  .s_axi_rready    ( io_intc_lite.r_ready  ),
+  .s_axi_rresp     ( io_intc_lite.r_resp   ),
+  .s_axi_rvalid    ( io_intc_lite.r_valid  ),
+  .s_axi_wdata     ( io_intc_lite.w_data   ),
+  .s_axi_wready    ( io_intc_lite.w_ready  ),
+  .s_axi_wvalid    ( io_intc_lite.w_valid  ),
+  .s_axi_wstrb     ( io_intc_lite.w_strb   ),
+  .intr            ( {2'b0, gpio_irq, dma_irq, phy_irq, eth_irq, spi_irq, uart_irq} ), // input wire [7 : 0] intr
+  .irq             ( intc_irq              )                      // output wire irq
+);
+
+   assign interrupt = intc_irq;
+   
+`else // !`ifdef ADD_INTC
+
+   // interrupt
+   assign interrupt = {gpio_irq, dma_irq, phy_irq, eth_irq, spi_irq, uart_irq};
+
+`endif // !`ifdef ADD_INTC
+   
+   /////////////////////////////////////////////////////////////
    // IO crossbar
 
-   localparam NUM_DEVICE = 5;
+   localparam NUM_DEVICE = 7;
 
    // output of the IO crossbar
    nasti_channel
@@ -1112,7 +1208,7 @@ axi_cdma_0 axi_central_dma (
        .DATA_WIDTH  ( `LOWRISC_IO_DAT_WIDTH     ))
    io_cbo_lite();
 
-   nasti_channel ios_dmm5(), ios_dmm6(), ios_dmm7(); // dummy channels
+   nasti_channel ios_dmm7(); // dummy channel
 
    nasti_channel_slicer #(NUM_DEVICE)
    io_slicer (
@@ -1122,8 +1218,8 @@ axi_cdma_0 axi_central_dma (
               .slave_2  ( io_spi_lite   ),
               .slave_3  ( io_eth_lite   ),
               .slave_4  ( io_dma_lite   ),
-              .slave_5  ( ios_dmm5      ),
-              .slave_6  ( ios_dmm6      ),
+              .slave_5  ( io_gpio_lite  ),
+              .slave_6  ( io_intc_lite  ),
               .slave_7  ( ios_dmm7      )
               );
 
@@ -1170,6 +1266,16 @@ axi_cdma_0 axi_central_dma (
  `ifdef ADD_DMA
    defparam io_crossbar.BASE4 = `DEV_MAP__io_ext_dma__BASE;
    defparam io_crossbar.MASK4 = `DEV_MAP__io_ext_dma__MASK;
+ `endif
+
+ `ifdef ADD_GPIO
+   defparam io_crossbar.BASE5 = `DEV_MAP__io_ext_gpio__BASE;
+   defparam io_crossbar.MASK5 = `DEV_MAP__io_ext_gpio__MASK;
+ `endif
+
+ `ifdef ADD_INTC
+   defparam io_crossbar.BASE6 = `DEV_MAP__io_ext_intc__BASE;
+   defparam io_crossbar.MASK6 = `DEV_MAP__io_ext_intc__MASK;
  `endif
 
    /////////////////////////////////////////////////////////////
@@ -1340,9 +1446,6 @@ axi_cdma_0 axi_central_dma (
       .io_debug_rst                  ( rst                                    ),
       .io_cpu_rst                    ( cpu_rst                                )
       );
-
-   // interrupt
-   assign interrupt = {62'b0, spi_irq, uart_irq};
 
    /////////////////////////////////////////////////////////////
    // IO memory crossbar

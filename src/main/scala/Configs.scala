@@ -17,6 +17,8 @@ case object UseSPI extends Field[Boolean]
 case object UseEth extends Field[Boolean]
 case object UseBootRAM extends Field[Boolean]
 case object UseDMA extends Field[Boolean]
+case object UseGPIO extends Field[Boolean]
+case object UseINTC extends Field[Boolean]
 case object UseFlash extends Field[Boolean]
 case object RAMSize extends Field[BigInt]
 case object IOTagBits extends Field[Int]
@@ -64,6 +66,14 @@ class BaseConfig extends Config (
       if (site(UseDMA)) {
         entries += AddrMapEntry("dma", MemSize(1<<12, 1<<13, MemAttr(AddrMapProt.RW)))
         Dump("ADD_DMA", true)
+      }
+      if (site(UseGPIO)) {
+        entries += AddrMapEntry("gpio", MemSize(1<<12, 1<<13, MemAttr(AddrMapProt.RW)))
+        Dump("ADD_GPIO", true)
+      }
+      if (site(UseINTC)) {
+        entries += AddrMapEntry("intc", MemSize(1<<12, 1<<13, MemAttr(AddrMapProt.RW)))
+        Dump("ADD_INTC", true)
       }
       new AddrMap(entries)
     }
@@ -116,6 +126,16 @@ class BaseConfig extends Config (
       if(site(UseDMA)) {
         res append  "dma {\n"
         res append s"  addr 0x${addrMap("io:ext:dma").start.toString(16)};\n"
+        res append  "};\n"
+      }
+      if(site(UseGPIO)) {
+        res append  "gpio {\n"
+        res append s"  addr 0x${addrMap("io:ext:gpio").start.toString(16)};\n"
+        res append  "};\n"
+      }
+      if(site(UseINTC)) {
+        res append  "intc {\n"
+        res append s"  addr 0x${addrMap("io:ext:intc").start.toString(16)};\n"
         res append  "};\n"
       }
       res append  "ram {\n"
@@ -349,6 +369,8 @@ class BaseConfig extends Config (
       case UseSPI => false
       case UseEth => false
       case UseDMA => false
+      case UseGPIO => false
+      case UseINTC => false
       case UseBootRAM => false
       case UseFlash => false
 
@@ -448,6 +470,18 @@ class WithDMAConfig extends Config (
   }
 )
 
+class WithGPIOConfig extends Config (
+  (pname,site,here) => pname match {
+    case UseGPIO => true
+  }
+)
+
+class WithINTConfig extends Config (
+  (pname,site,here) => pname match {
+    case UseINTC => true
+  }
+)
+
 class WithUARTConfig extends Config (
   (pname,site,here) => pname match {
     case UseUART => true
@@ -495,7 +529,7 @@ class FPGADebugConfig extends
     Config(new WithDebugConfig ++ new BasicFPGAConfig)
 
 class FPGAEthConfig extends
-    Config(new WithDMAConfig ++ new WithEthConfig ++ new FPGAConfig)
+    Config(new WithINTConfig ++ new WithGPIOConfig ++ new WithDMAConfig ++ new WithEthConfig ++ new FPGAConfig)
 
 class Nexys4Config extends
     Config(new With128MRamConfig ++ new FPGAConfig)

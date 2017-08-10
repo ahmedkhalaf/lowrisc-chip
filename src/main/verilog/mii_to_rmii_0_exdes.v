@@ -98,7 +98,8 @@ output wire s_axi_arready,
 output[31:0] s_axi_rdata,
 output[1:0] s_axi_rresp,
 output wire s_axi_rvalid,
-input wire s_axi_rready);
+input wire s_axi_rready,
+output wire ip2intc_irpt);
 
 (* keep = "true" *) wire   m_axi_aclk  = clk_eth;
 wire   m_axi_aresetn = s_axi_aresetn;
@@ -136,7 +137,7 @@ wire [32:0] const0;
 wire  prmry_in_xored;
 wire  phy_mdc;
 wire  zero;
-
+   
   assign zero = 1'b0;
   assign eth_txen = rmii2phy_tx_en;
   assign eth_txd = rmii2phy_txd;
@@ -147,7 +148,7 @@ wire  zero;
   (* keep_hierarchy = "yes" *) axi_ethernetlite_0 ETH_SRC(
     .s_axi_aclk(m_axi_aclk),
     .s_axi_aresetn(m_axi_aresetn),
-    .ip2intc_irpt(),
+    .ip2intc_irpt(ip2intc_irpt),
     .s_axi_awaddr(m_axi_awaddr[12:0] ),
     .s_axi_awvalid(m_axi_awvalid),
     .s_axi_awready(m_axi_awready),

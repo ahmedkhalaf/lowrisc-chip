@@ -190,4 +190,17 @@ module tb;
 
 `endif
 
+  wire         o_erefclk; // RMII clock out
+  wire [1:0]   i_erxd ;
+  wire         i_erx_dv ;
+  wire         i_erx_er ;
+  wire         i_emdint ;
+  wire [1:0]   o_etxd ;
+  wire         o_etx_en ;
+  wire         o_emdc ;
+  wire         io_emdio ;
+  wire         o_erstn ;
+  wire [15:0]  o_led ;
+  wire [15:0]  i_dip ;
+
 endmodule // tb
