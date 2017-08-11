@@ -327,7 +327,7 @@ module chip_top
 
       `ifdef NEXYS4_COMMON
         //clock generator
-        logic mig_sys_clk, clk_locked;
+        logic mig_sys_clk, clk_locked, mmcm_locked;
         logic clk_io_uart, clk_eth, clk_rmii; // UART IO clock for debug
 
         clk_wiz_0 clk_gen
@@ -335,11 +335,20 @@ module chip_top
           .clk_in1     ( clk_p         ), // 100 MHz onboard
           .clk_out1    ( mig_sys_clk   ), // 200 MHz
           .clk_io_uart ( clk_io_uart   ), // 60 MHz
-	  .clk_eth     ( clk_eth       ), // 100 MHz eth
-	  .clk_rmii    ( clk_rmii      ), // 50 MHz rmii
-          .resetn      ( rst_top       ),
+          .clk_eth     ( clk_eth       ), // 100 MHz eth
+          .clk_rmii    ( clk_rmii      ), // 50 MHz rmii
           .locked      ( clk_locked    )
         );
+
+        assign rstn = &rstn_dly;
+        reg [6:0] rstn_dly;
+             
+        always @(posedge clk_rmii)
+          if ((rst_top&mmcm_locked&clk_locked) == 1'b0)
+            rstn_dly = 7'b0;
+          else if (1'b0 == rstn)
+            rstn_dly = rstn_dly + 7'b1;
+           
       `endif //  `ifdef NEXYS4_COMMON
 
       // DRAM controller
@@ -405,7 +414,7 @@ module chip_top
         `endif // !`elsif NEXYS4
           .ui_clk               ( mig_ui_clk             ),
           .ui_clk_sync_rst      ( mig_ui_rst             ),
-          .mmcm_locked          ( rstn                   ),
+          .mmcm_locked          ( mmcm_locked            ),
           .aresetn              ( rstn                   ), // AXI reset
           .app_sr_req           ( 1'b0                   ),
           .app_ref_req          ( 1'b0                   ),
@@ -466,7 +475,7 @@ module chip_top
     ram_behav
     (
       .clk           ( clk         ),
-      .rstn          ( rstn        ),
+      .rstn          ( rstn ),
       .nasti         ( mem_nasti   )
     );
   `endif // !`ifdef ADD_PHY_DDR
@@ -550,6 +559,9 @@ module chip_top
    logic [BRAM_SIZE-1:0]               ram_addr;
    logic [`LOWRISC_IO_DAT_WIDTH-1:0]   ram_wrdata, ram_rddata;
 
+   assign local_bram_nasti.r_user = 0;
+   assign local_bram_nasti.b_user = 0;
+    
    axi_bram_ctrl_0 BramCtl
      (
       .s_axi_aclk      ( clk                       ),
@@ -659,6 +671,9 @@ module chip_top
 
    wire       flash_ss_i,  flash_ss_o,  flash_ss_t;
    wire [3:0] flash_io_i,  flash_io_o,  flash_io_t;
+
+   assign local_flash_nasti.r_user = 0;
+   assign local_flash_nasti.b_user = 0;
 
    axi_quad_spi_1 flash_i
      (
@@ -898,8 +913,8 @@ module chip_top
   `ifdef ADD_UART
    axi_uart16550_0 uart_i
      (
-      .s_axi_aclk      ( clk                    ),
-      .s_axi_aresetn   ( rstn                   ),
+      .s_axi_aclk      ( clk                   ),
+      .s_axi_aresetn   ( rstn                  ),
       .s_axi_araddr    ( io_uart_lite.ar_addr  ),
       .s_axi_arready   ( io_uart_lite.ar_ready ),
       .s_axi_arvalid   ( io_uart_lite.ar_valid ),
@@ -949,7 +964,7 @@ module chip_top
    host_behav host
      (
       .clk          ( clk          ),
-      .rstn         ( rstn         ),
+      .rstn         ( rstn  ),
       .nasti        ( io_host_lite )
       );
  `endif
@@ -961,9 +976,11 @@ module chip_top
        .ADDR_WIDTH  ( `ROCKET_PADDR_WIDTH       ),
        .DATA_WIDTH  ( `LOWRISC_IO_DAT_WIDTH     ))
    io_eth_lite();
-   logic                       eth_irq;
+   logic                       eth_irq, phy_irq;
 
 `ifdef ADD_ETH
+
+   assign phy_irq = (i_emdint == 1'b0);
 
 wire io_emdio_i, phy_emdio_o, phy_emdio_t;
 reg phy_emdio_i, io_emdio_o, io_emdio_t;
@@ -1022,11 +1039,13 @@ reg phy_emdio_i, io_emdio_o, io_emdio_t;
       .s_axi_wdata     ( io_eth_lite.w_data   ),
       .s_axi_wready    ( io_eth_lite.w_ready  ),
       .s_axi_wstrb     ( io_eth_lite.w_strb   ),
-      .s_axi_wvalid    ( io_eth_lite.w_valid  ));
+      .s_axi_wvalid    ( io_eth_lite.w_valid  ),
+      .ip2intc_irpt    ( eth_irq ));
 
 `else // !`ifdef ADD_ETH
 
    assign eth_irq = 1'b0;
+   assign phy_irq = 1'b0;
 
 `endif // !`ifdef ADD_ETH
 
@@ -1040,6 +1059,9 @@ reg phy_emdio_i, io_emdio_o, io_emdio_t;
    logic                       dma_irq;
 
 `ifdef ADD_DMA
+
+    logic [31:0] cdma_tvect_out;
+    
 axi_cdma_0 axi_central_dma (
   .m_axi_aclk           ( clk                  ),                  // input wire m_axi_aclk
   .s_axi_lite_aclk      ( clk                  ),
@@ -1147,6 +1169,8 @@ axi_cdma_0 axi_central_dma (
       .slave  ( io_cbo_lite )
       );
 
+   assign io_lite.w_last = 0;
+   
  `ifdef ADD_HOST
    defparam io_crossbar.BASE0 = `DEV_MAP__io_ext_host__BASE ;
    defparam io_crossbar.MASK0 = `DEV_MAP__io_ext_host__MASK ;
@@ -1342,7 +1366,7 @@ axi_cdma_0 axi_central_dma (
       );
 
    // interrupt
-   assign interrupt = {62'b0, spi_irq, uart_irq};
+   assign interrupt = |{dma_irq, phy_irq, eth_irq, spi_irq, uart_irq};
 
    /////////////////////////////////////////////////////////////
    // IO memory crossbar
