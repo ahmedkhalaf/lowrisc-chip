@@ -175,6 +175,9 @@ module chip_top
     dma_nasti();
 `endif
 
+wire io_emdio_i, phy_emdio_o, phy_emdio_t, clk_rmii, clk_locked;
+reg phy_emdio_i, io_emdio_o, io_emdio_t;
+
 `ifdef ADD_PHY_DDR
 
     // the NASTI bus for off-FPGA DRAM, converted to High frequency
@@ -327,8 +330,9 @@ module chip_top
 
       `ifdef NEXYS4_COMMON
         //clock generator
-        logic mig_sys_clk, clk_locked;
-        logic clk_io_uart, clk_eth, clk_rmii; // UART IO clock for debug
+   logic mig_sys_clk;
+   
+        logic clk_io_uart, clk_eth; // UART IO clock for debug
 
         clk_wiz_0 clk_gen
         (
@@ -340,6 +344,7 @@ module chip_top
           .resetn      ( rst_top       ),
           .locked      ( clk_locked    )
         );
+   
       `endif //  `ifdef NEXYS4_COMMON
 
       // DRAM controller
@@ -454,8 +459,11 @@ module chip_top
   `else // `ifdef ADD_PHY_DDR
 
     assign clk = clk_p;
+    assign clk_rmii = clk_p;
+    assign clk_eth = clk_p;
     assign rstn = !rst_top;
-
+    assign clk_locked = rstn;
+   
     nasti_ram_behav
     #(
       .ID_WIDTH     ( `ROCKET_MEM_TAG_WIDTH   ),
@@ -485,6 +493,7 @@ module chip_top
    // non-memory IO nasti-lite for peripherals
    nasti_channel
      #(
+       .ID_WIDTH    ( `ROCKET_IO_TAG_WIDTH  ),
        .ADDR_WIDTH  ( `ROCKET_PADDR_WIDTH   ),
        .DATA_WIDTH  ( `LOWRISC_IO_DAT_WIDTH ))
    io_lite();
@@ -498,7 +507,8 @@ module chip_top
        )
    io_bridge
      (
-      .*,
+      .clk(clk),
+      .rstn(rstn),
       .nasti_master  ( io_io_nasti  ),
       .lite_slave    ( io_lite      )
       );
@@ -530,7 +540,8 @@ module chip_top
        .SLAVE_DATA_WIDTH  ( `LOWRISC_IO_DAT_WIDTH ))
    bram_narrower
      (
-      .*,
+      .clk(clk),
+      .rstn(rstn),
       .master ( io_bram_nasti     ),
       .slave  ( local_bram_nasti  )
       );
@@ -612,7 +623,7 @@ module chip_top
    assign ram_we_full = ram_we << ram_we_shift;
    assign ram_wrdata_full = {(BRAM_WIDTH / `LOWRISC_IO_DAT_WIDTH){ram_wrdata}};
 
-   always_ff @(posedge ram_clk)
+   always @(posedge ram_clk)
      if(ram_en) begin
         ram_block_addr_delay <= ram_block_addr;
         ram_lsb_addr_delay <= ram_lsb_addr;
@@ -652,7 +663,8 @@ module chip_top
        .SLAVE_DATA_WIDTH  ( `LOWRISC_IO_DAT_WIDTH ))
    flash_narrower
      (
-      .*,
+      .clk(clk),
+      .rstn(rstn),
       .master ( io_flash_nasti     ),
       .slave  ( local_flash_nasti  )
       );
@@ -733,7 +745,12 @@ module chip_top
       .io3_t            ( flash_io_t[3]                 ),
       .ss_i             ( flash_ss_i                    ),
       .ss_o             ( flash_ss_o                    ),
-      .ss_t             ( flash_ss_t                    )
+      .ss_t             ( flash_ss_t                    ),
+      .cfgclk (),
+      .cfgmclk (),
+      .eos(),
+      .preq(),
+      .ip2intc_irpt()
       );
 
    // tri-state gates
@@ -746,6 +763,15 @@ module chip_top
    assign flash_ss = !flash_ss_t ? flash_ss_o : 1'bz;
    assign flash_ss_i = flash_ss;
 
+`else
+
+    keeper flash_i
+     (
+      .clk(clk),
+      .rstn(rstn),
+      .nasti           ( io_flash_nasti           )
+      );
+   
 `endif
 
    /////////////////////////////////////////////////////////////
@@ -770,7 +796,8 @@ module chip_top
        )
    spi_i
      (
-      .*,
+      .clk(clk),
+      .rstn(rstn),
       .nasti           ( io_spi_lite           ),
       .io0_i           ( spi_mosi_i            ),
       .io0_o           ( spi_mosi_o            ),
@@ -784,7 +811,8 @@ module chip_top
       .ss_i            ( spi_cs_i              ),
       .ss_o            ( spi_cs_o              ),
       .ss_t            ( spi_cs_t              ),
-      .ip2intc_irpt    ( spi_irq               ) // polling for now
+      .ip2intc_irpt    ( spi_irq               ), // polling for now
+      .sd_reset()
       );
 
 
@@ -802,6 +830,14 @@ module chip_top
    assign spi_cs_i = 1'b1;;     // always in master mode
 
 `else // !`ifdef ADD_SPI
+
+   keeper
+   spi_i
+     (
+      .clk(clk),
+      .rstn(rstn),
+      .nasti           ( io_spi_lite           )
+      );
 
    assign spi_irq = 1'b0;
 
@@ -848,7 +884,8 @@ module chip_top
        )
    u_debug_system
      (
-      .*,
+      .clk(clk),
+      .rstn(rstn),
       .clk_io          ( clk_io_uart            ),
       .uart_irq        ( uart_irq               ),
       .uart_ar_addr    ( io_uart_lite.ar_addr   ),
@@ -898,8 +935,8 @@ module chip_top
   `ifdef ADD_UART
    axi_uart16550_0 uart_i
      (
-      .s_axi_aclk      ( clk                    ),
-      .s_axi_aresetn   ( rstn                   ),
+      .s_axi_aclk      ( clk                   ),
+      .s_axi_aresetn   ( rstn                  ),
       .s_axi_araddr    ( io_uart_lite.ar_addr  ),
       .s_axi_arready   ( io_uart_lite.ar_ready ),
       .s_axi_arvalid   ( io_uart_lite.ar_valid ),
@@ -917,18 +954,32 @@ module chip_top
       .s_axi_wready    ( io_uart_lite.w_ready  ),
       .s_axi_wstrb     ( io_uart_lite.w_strb   ),
       .s_axi_wvalid    ( io_uart_lite.w_valid  ),
-      .ip2intc_irpt    ( uart_irq               ),
-      .freeze          ( 1'b0                   ),
-      .rin             ( 1'b1                   ),
-      .dcdn            ( 1'b1                   ),
-      .dsrn            ( 1'b1                   ),
-      .sin             ( rxd                    ),
-      .sout            ( txd                    ),
-      .ctsn            ( cts                    ),
-      .rtsn            ( rts                    )
+      .ip2intc_irpt    ( uart_irq              ),
+      .freeze          ( 1'b0                  ),
+      .rin             ( 1'b1                  ),
+      .dcdn            ( 1'b1                  ),
+      .dsrn            ( 1'b1                  ),
+      .sin             ( rxd                   ),
+      .sout            ( txd                   ),
+      .ctsn            ( cts                   ),
+      .rtsn            ( rts                   ),
+      .baudoutn (),
+      .ddis(),
+      .dtrn(),
+      .out1n(),
+      .out2n(),
+      .rxrdyn(),
+      .txrdyn()
       );
 
   `else // !`ifdef ADD_UART
+
+    keeper uart_i
+     (
+      .clk(clk),
+      .rstn(rstn),
+      .nasti           ( io_uart_lite           )
+      );
 
    assign uart_irq = 1'b0;
 
@@ -952,6 +1003,14 @@ module chip_top
       .rstn         ( rstn         ),
       .nasti        ( io_host_lite )
       );
+ `else
+   keeper host
+     (
+      .clk(clk),
+      .rstn(rstn),
+      .nasti           ( io_host_lite           )
+      );
+   
  `endif
 
    /////////////////////////////////////////////////////////////
@@ -965,15 +1024,12 @@ module chip_top
 
 `ifdef ADD_ETH
 
-wire io_emdio_i, phy_emdio_o, phy_emdio_t;
-reg phy_emdio_i, io_emdio_o, io_emdio_t;
-   
-  always @(posedge clk_rmii)
-    begin
-    phy_emdio_i <= io_emdio_i;
-    io_emdio_o <= phy_emdio_o;
-    io_emdio_t <= phy_emdio_t;
-    end
+   always @(posedge clk_rmii)
+     begin
+        phy_emdio_i <= io_emdio_i;
+        io_emdio_o <= phy_emdio_o;
+        io_emdio_t <= phy_emdio_t;
+     end
 
    IOBUF #(
       .DRIVE(12), // Specify the output drive strength
@@ -987,10 +1043,10 @@ reg phy_emdio_i, io_emdio_o, io_emdio_t;
       .T(io_emdio_t)      // 3-state enable input, high=input, low=output
    );
 
-    mii_to_rmii_0_exdes eth_i
+    mii_to_rmii_0_open eth_i
      (
-      .clk_rmii(clk_rmii),
-      .clk_eth(clk_eth),
+      .clk_50(clk_rmii),
+      .clk_100(clk_eth),
       .locked(clk_locked),
     // SMSC ethernet PHY connections
       .eth_rstn    ( o_erstn ),
@@ -1004,6 +1060,7 @@ reg phy_emdio_i, io_emdio_o, io_emdio_t;
       .phy_mdio_i  ( phy_emdio_i ),
       .phy_mdio_o  ( phy_emdio_o ),
       .phy_mdio_t  ( phy_emdio_t ),
+      .ip2intc_irpt( eth_irq ),
       .s_axi_aclk      ( clk                  ),
       .s_axi_aresetn   ( rstn                 ),
       .s_axi_araddr    ( io_eth_lite.ar_addr  ),
@@ -1025,6 +1082,14 @@ reg phy_emdio_i, io_emdio_o, io_emdio_t;
       .s_axi_wvalid    ( io_eth_lite.w_valid  ));
 
 `else // !`ifdef ADD_ETH
+
+   keeper
+   eth_i
+     (
+      .clk(clk),
+      .rstn(rstn),
+      .nasti           ( io_eth_lite           )
+      );
 
    assign eth_irq = 1'b0;
 
@@ -1095,6 +1160,13 @@ axi_cdma_0 axi_central_dma (
 
 `else // !`ifdef ADD_DMA
 
+    keeper dma_i
+     (
+      .clk(clk),
+      .rstn(rstn),
+      .nasti           ( io_dma_lite           )
+      );
+  
    assign dma_irq = 1'b0;
 
 `endif // !`ifdef ADD_DMA
@@ -1102,7 +1174,7 @@ axi_cdma_0 axi_central_dma (
    /////////////////////////////////////////////////////////////
    // IO crossbar
 
-   localparam NUM_DEVICE = 5;
+   localparam NUM_DEVICE = 2;
 
    // output of the IO crossbar
    nasti_channel
@@ -1113,6 +1185,27 @@ axi_cdma_0 axi_central_dma (
    io_cbo_lite();
 
    nasti_channel ios_dmm5(), ios_dmm6(), ios_dmm7(); // dummy channels
+
+    keeper dmm5_i
+     (
+      .clk(clk),
+      .rstn(rstn),
+      .nasti           ( ios_dmm5           )
+      );
+
+    keeper dmm6_i
+     (
+      .clk(clk),
+      .rstn(rstn),
+      .nasti           ( ios_dmm6           )
+      );
+
+    keeper dmm7_i
+     (
+      .clk(clk),
+      .rstn(rstn),
+      .nasti           ( ios_dmm7           )
+      );
 
    nasti_channel_slicer #(NUM_DEVICE)
    io_slicer (
@@ -1142,7 +1235,8 @@ axi_cdma_0 axi_central_dma (
        )
    io_crossbar
      (
-      .*,
+      .clk(clk),
+      .rstn(rstn),
       .master ( io_lite     ),
       .slave  ( io_cbo_lite )
       );
@@ -1347,7 +1441,7 @@ axi_cdma_0 axi_central_dma (
    /////////////////////////////////////////////////////////////
    // IO memory crossbar
 
-   localparam NUM_IO_MEM = 2;
+   localparam NUM_IO_MEM = 1;
 
    // output of the IO crossbar
    nasti_channel
@@ -1359,6 +1453,41 @@ axi_cdma_0 axi_central_dma (
    io_mem_cbo_nasti();
 
    nasti_channel io_mem_dmm3(), io_mem_dmm4(), io_mem_dmm5(), io_mem_dmm6(), io_mem_dmm7(); // dummy channels
+
+    keeper mdmm3_i
+     (
+      .clk(clk),
+      .rstn(rstn),
+      .nasti           ( io_mem_dmm3           )
+      );
+
+    keeper mdmm4_i
+     (
+      .clk(clk),
+      .rstn(rstn),
+      .nasti           ( io_mem_dmm4           )
+      );
+
+    keeper mdmm5_i
+     (
+      .clk(clk),
+      .rstn(rstn),
+      .nasti           ( io_mem_dmm5           )
+      );
+
+    keeper mdmm6_i
+     (
+      .clk(clk),
+      .rstn(rstn),
+      .nasti           ( io_mem_dmm6           )
+      );
+
+    keeper mdmm7_i
+     (
+      .clk(clk),
+      .rstn(rstn),
+      .nasti           ( io_mem_dmm7           )
+      );
 
    nasti_channel_slicer #(NUM_IO_MEM + 1)
    io_mem_slicer (
@@ -1390,7 +1519,8 @@ axi_cdma_0 axi_central_dma (
        )
    io_mem_crossbar
      (
-      .*,
+      .clk(clk),
+      .rstn(rstn),
       .master ( io_nasti         ),
       .slave  ( io_mem_cbo_nasti )
       );

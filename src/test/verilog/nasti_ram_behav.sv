@@ -12,141 +12,98 @@ module nasti_ram_behav
     nasti_channel.slave nasti
     );
 
-   initial assert(ID_WIDTH <= 16) else $error("Error: ID_WIDTH > 16 is not supported!");
-   initial assert(ADDR_WIDTH <= 32) else $error("Error: ADDR_WIDTH > 32 is not supported!");
-   initial assert(DATA_WIDTH <= 256) else $error("Error: DATA_WIDTH > 256 is not supported!");
-   initial assert(USER_WIDTH <= 16) else $error("Error: USER_WIDTH > 16 is not supported!");
+     wire                                    PENABLE    ;
+     wire                                    PWRITE     ;
+     wire [31:0]                             PADDR      ;
+     wire                                    PSEL       ;
+     wire [31:0]                             PWDATA     ;
+     reg  [31:0]                             PRDATA     ;
+     wire                                    PREADY = 1'b1   ;
+     wire                                    PSLVERR = 1'b0  ;
 
-   import "DPI-C" function bit memory_write_req (
-                                                 input bit [15:0] id,
-                                                 input bit [31:0] addr,
-                                                 input bit [7:0]  len,
-                                                 input bit [2:0]  size,
-                                                 input bit [15:0] user
-                                                 );
+axi2apb32
+#(
+    .AXI4_ADDRESS_WIDTH ( ADDR_WIDTH ),
+    .AXI4_RDATA_WIDTH   ( DATA_WIDTH ),
+    .AXI4_WDATA_WIDTH   ( DATA_WIDTH ),
+    .AXI4_ID_WIDTH      ( ID_WIDTH   ),
+    .AXI4_USER_WIDTH    ( USER_WIDTH )
+)
+DUT
+(
+    .ACLK           (  clk                  ),
+    .ARESETn        (  rstn                 ),
 
-   import "DPI-C" function bit memory_write_data (
-                                                  input bit [255:0] data,
-                                                  input bit [31:0]  strb,
-                                                  input bit         last
-                                                  );
+    .AWID_i         (  mem_nasti.aw_id      ),
+    .AWADDR_i       (  mem_nasti.aw_addr    ),
+    .AWLEN_i        (  mem_nasti.aw_len     ),
+    .AWSIZE_i       (  mem_nasti.aw_size    ),
+    .AWBURST_i      (  mem_nasti.aw_burst   ),
+    .AWLOCK_i       (  mem_nasti.aw_lock    ),
+    .AWCACHE_i      (  mem_nasti.aw_cache   ),
+    .AWPROT_i       (  mem_nasti.aw_prot    ),
+    .AWREGION_i     (  mem_nasti.aw_region  ),
+    .AWUSER_i       (  mem_nasti.aw_user    ),
+    .AWQOS_i        (  mem_nasti.aw_qos     ),
+    .AWVALID_i      (  mem_nasti.aw_valid   ),
+    .AWREADY_o      (  mem_nasti.aw_ready   ),
 
-   import "DPI-C" function bit memory_write_resp (
-                                                  output bit [15:0] id,
-                                                  output bit [1:0]  resp,
-                                                  output bit [15:0] user
-                                                  );
+    .WDATA_i        (  mem_nasti.w_data     ),
+    .WSTRB_i        (  mem_nasti.w_strb     ),
+    .WLAST_i        (  mem_nasti.w_last     ),
+    .WUSER_i        (  mem_nasti.w_user     ),
+    .WVALID_i       (  mem_nasti.w_valid    ),
+    .WREADY_o       (  mem_nasti.w_ready    ),
 
-   import "DPI-C" function bit memory_read_req (
-                                                input bit [15:0] id,
-                                                input bit [31:0] addr,
-                                                input bit [7:0]  len,
-                                                input bit [2:0]  size,
-                                                input bit [15:0] user
-                                                );
+    .BID_o          (  mem_nasti.b_id       ),
+    .BRESP_o        (  mem_nasti.b_resp     ),
+    .BVALID_o       (  mem_nasti.b_valid    ),
+    .BUSER_o        (  mem_nasti.b_user     ),
+    .BREADY_i       (  mem_nasti.b_ready    ),
 
-   import "DPI-C" function bit memory_read_resp (
-                                                 output bit [15:0]  id,
-                                                 output bit [255:0] data,
-                                                 output bit [1:0]   resp,
-                                                 output bit         last,
-                                                 output bit [15:0]  user
-                                                 );
-   import "DPI-C" function bit memory_model_init ();
-   import "DPI-C" function bit memory_model_step ();
+    .ARID_i         (  mem_nasti.ar_id      ),
+    .ARADDR_i       (  mem_nasti.ar_addr    ),
+    .ARLEN_i        (  mem_nasti.ar_len     ),
+    .ARSIZE_i       (  mem_nasti.ar_size    ),
+    .ARBURST_i      (  mem_nasti.ar_burst   ),
+    .ARLOCK_i       (  mem_nasti.ar_lock    ),
+    .ARCACHE_i      (  mem_nasti.ar_cache   ),
+    .ARPROT_i       (  mem_nasti.ar_prot    ),
+    .ARREGION_i     (  mem_nasti.ar_region  ),
+    .ARUSER_i       (  mem_nasti.ar_user    ),
+    .ARQOS_i        (  mem_nasti.ar_qos     ),
+    .ARVALID_i      (  mem_nasti.ar_valid   ),
+    .ARREADY_o      (  mem_nasti.ar_ready   ),
 
-`ifndef VERILATOR
-   initial memory_model_init();
-`endif
+    .RID_o          (  mem_nasti.r_id       ),
+    .RDATA_o        (  mem_nasti.r_data     ),
+    .RRESP_o        (  mem_nasti.r_resp     ),
+    .RLAST_o        (  mem_nasti.r_last     ),
+    .RUSER_o        (  mem_nasti.r_user     ),
+    .RVALID_o       (  mem_nasti.r_valid    ),
+    .RREADY_i       (  mem_nasti.r_ready    ),
+    
+    .PENABLE    (PENABLE    ),
+    .PWRITE     (PWRITE     ),
+    .PADDR      (PADDR      ),
+    .PSEL       (PSEL       ),
+    .PWDATA     (PWDATA     ),
+    .PRDATA     (PRDATA     ),
+    .PREADY     (PREADY     ),
+    .PSLVERR    (PSLVERR    ),
+   
+    .test_en_i      (  1'b0             )
+ 
+);
 
-   always @(posedge clk)
-     memory_model_step();
+   reg [DATA_WIDTH-1:0]                      mem[0 : (1<<ADDR_WIDTH) ];
 
-`ifdef VERILATOR
-   // A workaround for Verilator since it treats DPI functions as pure
-   // Which leads to wrong function scheduling.
-   // introduce verilog side-effect to prohibit rescheduling.
-   // Issue submitted as
-   // http://www.veripool.org/issues/963-Verilator-impure-function-being-scheduled-wrong
-
-   reg dummy;
-
-   function void write_dummy(input logic b);
-      dummy = b;
-   endfunction // write_dummy
-
-`endif
-
-   always @(negedge clk or negedge rstn)
-     if(!rstn)
-       nasti.aw_ready <= 0;
-     else if(nasti.aw_valid) begin
-        //$display("%t, aw valid", $time);
-        nasti.aw_ready <= memory_write_req(nasti.aw_id, nasti.aw_addr, nasti.aw_len, nasti.aw_size, nasti.aw_user);
-`ifdef VERILATOR
-        write_dummy(nasti.aw_ready);
-`endif
-     end else
-       nasti.aw_ready <= 0;
-
-   always @(negedge clk or negedge rstn)
-     if(!rstn)
-       nasti.w_ready <= 0;
-     else if(nasti.w_valid && rstn) begin
-        //$display("%t, w valid", $time);
-        nasti.w_ready <= memory_write_data(nasti.w_data, nasti.w_strb, nasti.w_last);
-`ifdef VERILATOR
-        write_dummy(nasti.w_ready);
-`endif
-     end else
-       nasti.w_ready <= 0;
-
-   logic [15:0]   b_id;
-   logic [1:0]    b_resp;
-   logic [15:0]   b_user;
-   logic          b_valid;
-
-   always_ff @(posedge clk or negedge rstn)
-     if(!rstn)
-       b_valid <= 0;
-     else if(!b_valid || nasti.b_ready)
-       b_valid <= memory_write_resp(b_id, b_resp, b_user);
-
-   assign nasti.b_valid = b_valid;
-   assign nasti.b_id = b_id;
-   assign nasti.b_resp = b_resp;
-   assign nasti.b_user = b_user;
-
-   always @(negedge clk or negedge rstn)
-     if(!rstn)
-       nasti.ar_ready <= 0;
-     else if(nasti.ar_valid && rstn) begin
-        //$display("%t, ar valid", $time);
-        nasti.ar_ready <= memory_read_req(nasti.ar_id, nasti.ar_addr, nasti.ar_len, nasti.ar_size, nasti.ar_user);
-`ifdef VERILATOR
-        write_dummy(nasti.ar_ready);
-`endif
-     end else
-       nasti.ar_ready <= 0;
-
-   logic [15:0]   r_id;
-   logic [255:0]  r_data;
-   logic [1:0]    r_resp;
-   logic          r_last;
-   logic [15:0]   r_user;
-   logic          r_valid;
-
-   always_ff @(posedge clk or negedge rstn)
-     if(!rstn)
-       r_valid <= 0;
-     else if(!r_valid || nasti.r_ready)
-       r_valid <= memory_read_resp(r_id, r_data, r_resp, r_last, r_user);
-
-   assign nasti.r_valid = r_valid;
-   assign nasti.r_data = r_data;
-   assign nasti.r_last = r_last;
-   assign nasti.r_id = r_id;
-   assign nasti.r_resp = r_resp;
-   assign nasti.r_user = r_user;
-
+   always @(posedge clk) if (PSEL && PENABLE)
+     begin
+        if (PWRITE)
+          mem[PADDR[ADDR_WIDTH-1:0]] <= PWDATA;
+        else
+          PRDATA <= mem[PADDR[ADDR_WIDTH-1:0]];
+     end
+   
 endmodule // nasti_ram_behav

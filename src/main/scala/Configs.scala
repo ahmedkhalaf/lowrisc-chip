@@ -486,7 +486,9 @@ class With6BitTags extends Config(
 )
 
 class BasicFPGAConfig extends
-    Config(new WithSPIConfig ++ new WithBootRAMConfig ++ new WithFlashConfig ++ new BaseConfig)
+    Config(new WithBootRAMConfig ++ new BaseConfig)
+// ++ new WithFlashConfig
+// new WithSPIConfig ++
 
 class FPGAConfig extends
     Config(new WithUARTConfig ++ new BasicFPGAConfig)
@@ -495,7 +497,9 @@ class FPGADebugConfig extends
     Config(new WithDebugConfig ++ new BasicFPGAConfig)
 
 class FPGAEthConfig extends
-    Config(new WithDMAConfig ++ new WithEthConfig ++ new FPGAConfig)
+    Config(new FPGAConfig)
+// new WithEthConfig ++
+// new WithDMAConfig ++
 
 class Nexys4Config extends
     Config(new With128MRamConfig ++ new FPGAConfig)
