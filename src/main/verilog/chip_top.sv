@@ -134,9 +134,12 @@ module chip_top
  output wire        o_emdc ,
  inout wire         io_emdio ,
  output wire        o_erstn ,
+`endif //  `ifdef ADD_ETH
+
+`ifdef ADD_GPIO
  output reg [15:0]  o_led ,
  input wire [15:0]  i_dip ,
-`endif //  `ifdef ADD_ETH
+`endif //  `ifdef ADD_GPIO
  
     // clock and reset
     input         clk_p,
@@ -552,6 +555,9 @@ module chip_top
    logic [BRAM_SIZE-1:0]               ram_addr;
    logic [`LOWRISC_IO_DAT_WIDTH-1:0]   ram_wrdata, ram_rddata;
 
+   assign local_bram_nasti.r_user = 0;
+   assign local_bram_nasti.b_user = 0;
+    
    axi_bram_ctrl_0 BramCtl
      (
       .s_axi_aclk      ( clk                       ),
@@ -661,6 +667,9 @@ module chip_top
 
    wire       flash_ss_i,  flash_ss_o,  flash_ss_t;
    wire [3:0] flash_io_i,  flash_io_o,  flash_io_t;
+
+   assign local_flash_nasti.r_user = 0;
+   assign local_flash_nasti.b_user = 0;
 
    axi_quad_spi_1 flash_i
      (
@@ -1243,6 +1252,8 @@ axi_intc_0 intc_inst (
       .slave  ( io_cbo_lite )
       );
 
+   assign io_lite.w_last = 0;
+   
  `ifdef ADD_HOST
    defparam io_crossbar.BASE0 = `DEV_MAP__io_ext_host__BASE ;
    defparam io_crossbar.MASK0 = `DEV_MAP__io_ext_host__MASK ;

@@ -529,7 +529,9 @@ class FPGADebugConfig extends
     Config(new WithDebugConfig ++ new BasicFPGAConfig)
 
 class FPGAEthConfig extends
-    Config(new WithINTConfig ++ new WithGPIOConfig ++ new WithDMAConfig ++ new WithEthConfig ++ new FPGAConfig)
+    Config(new WithINTConfig ++ new WithDMAConfig ++ new WithEthConfig ++ new FPGAConfig)
+
+// was ++ new WithGPIOConfig
 
 class Nexys4Config extends
     Config(new With128MRamConfig ++ new FPGAConfig)
