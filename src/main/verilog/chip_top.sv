@@ -124,16 +124,16 @@ module chip_top
 
 `ifdef ADD_ETH 
  //! Ethernet MAC PHY interface signals
- output wire        o_erefclk, // RMII clock out
- input wire [1:0]   i_erxd ,
- input wire         i_erx_dv ,
- input wire         i_erx_er ,
- input wire         i_emdint ,
- output reg [1:0]   o_etxd ,
- output wire        o_etx_en ,
- output wire        o_emdc ,
- inout wire         io_emdio ,
- output wire        o_erstn ,
+ input wire [1:0]   i_erxd, // RMII receive data
+ input wire         i_erx_dv, // PHY data valid
+ input wire         i_erx_er, // PHY coding error
+ input wire         i_emdint, // PHY interrupt in active low
+ output reg         o_erefclk, // RMII clock out
+ output reg [1:0]   o_etxd, // RMII transmit data
+ output reg         o_etx_en, // RMII transmit enable
+ output wire        o_emdc, // MDIO clock
+ inout wire         io_emdio, // MDIO inout
+ output wire        o_erstn, // PHY reset active low
 `endif //  `ifdef ADD_ETH
  
     // clock and reset
@@ -165,7 +165,7 @@ module chip_top
         .DATA_WIDTH  ( `ROCKET_MEM_DAT_WIDTH ))
     mem_nasti();
 
-wire io_emdio_i, phy_emdio_o, phy_emdio_t, clk_rmii, clk_locked;
+wire io_emdio_i, phy_emdio_o, phy_emdio_t, clk_rmii, clk_rmii_quad, clk_locked, clk_locked_wiz;
 reg phy_emdio_i, io_emdio_o, io_emdio_t;
 
 `ifdef ADD_PHY_DDR
@@ -321,19 +321,21 @@ reg phy_emdio_i, io_emdio_o, io_emdio_t;
       `ifdef NEXYS4_COMMON
         //clock generator
    logic mig_sys_clk;
-   
+    
         logic clk_io_uart, clk_eth; // UART IO clock for debug
 
         clk_wiz_0 clk_gen
         (
-          .clk_in1     ( clk_p         ), // 100 MHz onboard
-          .clk_out1    ( mig_sys_clk   ), // 200 MHz
-          .clk_io_uart ( clk_io_uart   ), // 60 MHz
-	  .clk_eth     ( clk_eth       ), // 100 MHz eth
-	  .clk_rmii    ( clk_rmii      ), // 50 MHz rmii
-          .resetn      ( rst_top       ),
-          .locked      ( clk_locked    )
+          .clk_in1       ( clk_p          ), // 100 MHz onboard
+          .clk_out1      ( mig_sys_clk    ), // 200 MHz
+          .clk_io_uart   ( clk_io_uart    ), // 60 MHz
+	      .clk_eth       ( clk_eth        ), // 100 MHz eth
+	      .clk_rmii      ( clk_rmii       ), // 50 MHz rmii
+	      .clk_rmii_quad ( clk_rmii_quad  ), // 50 MHz rmii quad
+          .locked        ( clk_locked_wiz )
         );
+   
+   assign clk_locked = clk_locked_wiz & rst_top;
    
       `endif //  `ifdef NEXYS4_COMMON
 
@@ -449,8 +451,9 @@ reg phy_emdio_i, io_emdio_o, io_emdio_t;
   `else // `ifdef ADD_PHY_DDR
 
     assign clk = clk_p;
-    assign clk_rmii = clk_p;
     assign clk_eth = clk_p;
+    assign clk_rmii = clk_p;
+    assign clk_rmii_quad = clk_p;
     assign rstn = !rst_top;
     assign clk_locked = rstn;
 
@@ -977,6 +980,10 @@ reg phy_emdio_i, io_emdio_o, io_emdio_t;
 
 `ifdef ADD_ETH
 
+    logic [1:0] eth_txd;
+    logic eth_rstn, eth_refclk, eth_txen;
+    assign o_erstn = eth_rstn & clk_locked_wiz;
+    
    always @(posedge clk_rmii)
      begin
         phy_emdio_i <= io_emdio_i;
@@ -996,17 +1003,28 @@ reg phy_emdio_i, io_emdio_o, io_emdio_t;
       .T(io_emdio_t)      // 3-state enable input, high=input, low=output
    );
 
+    always @(posedge clk_eth)
+        begin
+        o_erefclk = eth_refclk; // RMII clock out
+        end
+    
+    always @(posedge clk_rmii_quad)
+        begin
+        o_etxd = eth_txd;
+        o_etx_en = eth_txen;
+        end
+
     mii_to_rmii_0_open eth_i
      (
       .clk_50(clk_rmii),
       .clk_100(clk_eth),
       .locked(clk_locked),
     // SMSC ethernet PHY connections
-      .eth_rstn    ( o_erstn ),
+      .eth_rstn    ( eth_rstn ),
       .eth_crsdv   ( i_erx_dv ),
-      .eth_refclk  ( o_erefclk ),
-      .eth_txd     ( o_etxd ),
-      .eth_txen    ( o_etx_en ),
+      .eth_refclk  ( eth_refclk ),
+      .eth_txd     ( eth_txd ),
+      .eth_txen    ( eth_txen ),
       .eth_rxd     ( i_erxd ),
       .eth_rxerr   ( i_erx_er ),
       .eth_mdc     ( o_emdc ),

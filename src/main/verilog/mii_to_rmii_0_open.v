@@ -102,97 +102,44 @@ output wire s_axi_rvalid,
 input wire s_axi_rready,
 output wire ip2intc_irpt);
 
-     wire                                    PENABLE    ;
-     wire                                    PWRITE     ;
-     wire [31:0]                             PADDR      ;
-     wire                                    PSEL       ;
-     wire [31:0]                             PWDATA     ;
-     wire [31:0]                             PRDATA     ;
-     wire                                    PREADY = 1'b1   ;
-   wire                                      PSLVERR = 1'b0  ;
+   wire     bram_rst_a;
+   wire     bram_clk_a;
+   wire     bram_en_a;
+   wire [3:0] bram_we_a;
+   wire [12:0] bram_addr_a;
+   wire [31:0] bram_wrdata_a, bram_rddata_a;
 
-   assign    ip2intc_irpt = 1'b0;
-   
-
-axi2apb32
-#(
-    .AXI4_ADDRESS_WIDTH ( 32 ),
-    .AXI4_RDATA_WIDTH   ( 32 ),
-    .AXI4_WDATA_WIDTH   ( 32 ),
-    .AXI4_ID_WIDTH      ( 8  ),
-    .AXI4_USER_WIDTH    ( 1  )
-)
-DUT
-(
-    .ACLK           (  s_axi_aclk       ),
-    .ARESETn        (  s_axi_aresetn    ),
-
-    .AWID_i         (  8'b0      ),
-    .AWADDR_i       (  s_axi_awaddr   ),
-    .AWLEN_i        (  8'b0     ),
-    .AWSIZE_i       (  3'b0    ),
-    .AWBURST_i      (  2'b0   ),
-    .AWLOCK_i       (  1'b0    ),
-    .AWCACHE_i      (  4'b0   ),
-    .AWPROT_i       (  3'b0    ),
-    .AWREGION_i     (  4'b0  ),
-    .AWUSER_i       (  1'b0    ),
-    .AWQOS_i        (  4'b0     ),
-    .AWVALID_i      (  s_axi_awvalid   ),
-    .AWREADY_o      (  s_axi_awready   ),
-
-      .WDATA_i          ( s_axi_wdata         ),
-      .WSTRB_i          ( s_axi_wstrb         ),
-      .WLAST_i          ( 1'b0         ),
-      .WUSER_i          ( 1'b0         ),
-      .WVALID_i         ( s_axi_wvalid        ),
-      .WREADY_o         ( s_axi_wready        ),
-
-      .BID_o            (            ),
-      .BRESP_o          ( s_axi_bresp         ),
-      .BVALID_o         ( s_axi_bvalid        ),
-      .BUSER_o          (          ),
-      .BREADY_i         ( s_axi_bready        ),
-
-    .ARID_i         (  8'b0      ),
-    .ARADDR_i       (  s_axi_araddr    ),
-    .ARLEN_i        (  8'b0     ),
-    .ARSIZE_i       (  3'b0    ),
-    .ARBURST_i      (  2'b0   ),
-    .ARLOCK_i       (  1'b0    ),
-    .ARCACHE_i      (  4'b0   ),
-    .ARPROT_i       (  3'b0    ),
-    .ARREGION_i     (  4'b0  ),
-    .ARUSER_i       (  1'b0    ),
-    .ARQOS_i        (  4'b0     ),
-    .ARVALID_i      (  s_axi_arvalid   ),
-    .ARREADY_o      (  s_axi_arready   ),
-
-    .RID_o          (         ),
-    .RDATA_o        (  s_axi_rdata     ),
-    .RRESP_o        (  s_axi_rresp     ),
-    .RLAST_o        (       ),
-    .RUSER_o        (       ),
-    .RVALID_o       (  s_axi_rvalid    ),
-    .RREADY_i       (  s_axi_rready    ),
-    
-    .PENABLE    (PENABLE    ),
-    .PWRITE     (PWRITE     ),
-    .PADDR      (PADDR      ),
-    .PSEL       (PSEL       ),
-    .PWDATA     (PWDATA     ),
-    .PRDATA     (PRDATA     ),
-    .PREADY     (PREADY     ),
-    .PSLVERR    (PSLVERR    ),
-   
-    .test_en_i      (  1'b0             )
- 
-);
-
-  wire [3:0] core_lsu_be = 4'b1111;
-
-  //! Ethernet MAC PHY interface signals
-wire redled;
+   axi_bram_ctrl_1 BramCtl
+     (
+      .s_axi_aclk(s_axi_aclk),        // input wire s_axi_aclk
+      .s_axi_aresetn(s_axi_aresetn),  // input wire s_axi_aresetn
+      .s_axi_awaddr(s_axi_awaddr[14:0]),    // input wire [14 : 0] s_axi_awaddr
+      .s_axi_awprot(3'b0),            // input wire [2 : 0] s_axi_awprot
+      .s_axi_awvalid(s_axi_awvalid),  // input wire s_axi_awvalid
+      .s_axi_awready(s_axi_awready),  // output wire s_axi_awready
+      .s_axi_wdata(s_axi_wdata),      // input wire [31 : 0] s_axi_wdata
+      .s_axi_wstrb(s_axi_wstrb),      // input wire [3 : 0] s_axi_wstrb
+      .s_axi_wvalid(s_axi_wvalid),    // input wire s_axi_wvalid
+      .s_axi_wready(s_axi_wready),    // output wire s_axi_wready
+      .s_axi_bresp(s_axi_bresp),      // output wire [1 : 0] s_axi_bresp
+      .s_axi_bvalid(s_axi_bvalid),    // output wire s_axi_bvalid
+      .s_axi_bready(s_axi_bready),    // input wire s_axi_bready
+      .s_axi_araddr(s_axi_araddr[14:0]),    // input wire [14 : 0] s_axi_araddr
+      .s_axi_arprot(3'b0),            // input wire [2 : 0] s_axi_arprot
+      .s_axi_arvalid(s_axi_arvalid),  // input wire s_axi_arvalid
+      .s_axi_arready(s_axi_arready),  // output wire s_axi_arready
+      .s_axi_rdata(s_axi_rdata),      // output wire [31 : 0] s_axi_rdata
+      .s_axi_rresp(s_axi_rresp),      // output wire [1 : 0] s_axi_rresp
+      .s_axi_rvalid(s_axi_rvalid),    // output wire s_axi_rvalid
+      .s_axi_rready(s_axi_rready),    // input wire s_axi_rready
+      .bram_rst_a(bram_rst_a),        // output wire bram_rst_a
+      .bram_clk_a(bram_clk_a),        // output wire bram_clk_a
+      .bram_en_a(bram_en_a),          // output wire bram_en_a
+      .bram_we_a(bram_we_a),          // output wire [3 : 0] bram_we_a
+      .bram_addr_a(bram_addr_a),      // output wire [14 : 0] bram_addr_a
+      .bram_wrdata_a(bram_wrdata_a),  // output wire [31 : 0] bram_wrdata_a
+      .bram_rddata_a(bram_rddata_a)   // input wire [31 : 0] bram_rddata_a
+      );
    
 framing_top open
   (
@@ -200,25 +147,25 @@ framing_top open
    .msoc_clk(s_axi_aclk),
    .clk_50(clk_50),
    .clk_100(clk_100),
-   .core_lsu_addr(PADDR),
-   .core_lsu_wdata(PWDATA),
-   .core_lsu_be(core_lsu_be),
-   .ce_d(PENABLE),
-   .we_d(PWRITE),
-   .framing_sel(PSEL),
-   .framing_rdata(PRDATA),
-   .o_edutrefclk     (eth_refclk     ),
-   .i_edutrxd    (eth_rxd    ),
-   .i_edutrx_dv       (eth_crsdv       ),
-   .i_edutrx_er       (eth_rxerr       ),
-   .o_eduttxd   (eth_txd   ),
-   .o_eduttx_en      (eth_txen      ),
-   .o_edutmdc        (eth_mdc        ),
-   .i_edutmdio   (phy_mdio_i   ),
-   .o_edutmdio   (phy_mdio_o   ),
-   .oe_edutmdio   (phy_mdio_t   ),
-   .o_edutrstn    (eth_rstn    ),   
-   .redled(redled)
-   );
+   .core_lsu_addr(bram_addr_a),
+   .core_lsu_wdata(bram_wrdata_a),
+   .core_lsu_be(bram_we_a),
+   .ce_d(bram_en_a),
+   .we_d(|bram_we_a),
+   .framing_sel(bram_en_a),
+   .framing_rdata(bram_rddata_a),
+   .o_edutrefclk(eth_refclk),
+   .i_edutrxd(eth_rxd),
+   .i_edutrx_dv(eth_crsdv),
+   .i_edutrx_er(eth_rxerr),
+   .o_eduttxd(eth_txd),
+   .o_eduttx_en(eth_txen),
+   .o_edutmdc(eth_mdc),
+   .i_edutmdio(phy_mdio_i),
+   .o_edutmdio(phy_mdio_o),
+   .oe_edutmdio(phy_mdio_t),
+   .o_edutrstn(eth_rstn),
+   .sync(ip2intc_irpt)
+);
 
 endmodule

@@ -4,7 +4,7 @@
 module framing_top
   (
   input wire rstn, msoc_clk, clk_50, clk_100,
-  input wire [31:0] core_lsu_addr,
+  input wire [12:0] core_lsu_addr,
   input wire [31:0] core_lsu_wdata,
   input wire [3:0] core_lsu_be,
   input wire       ce_d,
@@ -25,10 +25,10 @@ output reg  o_edutmdio   ,
 output reg  oe_edutmdio   ,
 output wire   o_edutrstn    ,   
 
-output reg   redled
+output reg sync
    );
 
-logic [31:0] core_lsu_addr_dly;   
+logic [12:0] core_lsu_addr_dly;   
 
 logic tx_enable_i, tx_byte_sent_o, tx_busy_o, rx_frame_o, rx_byte_received_o, rx_error_o;
 logic mac_tx_enable, mac_tx_gap, mac_tx_byte_sent, mac_rx_frame, mac_rx_byte_received, mac_rx_error;
@@ -47,7 +47,7 @@ reg        mii_rx_byte_received_i, full, byte_sync, mii_rx_frame_i, rx_frame_old
 
    wire rx_fcs_err_o;
    wire [3:0] m_enb = (we_d ? core_lsu_be : 4'hF);
-   logic edutmdio, o_edutmdclk, sync, cooked, tx_enable_old, loopback, loopback2;
+   logic edutmdio, o_edutmdclk, o_edutrst, cooked, tx_enable_old, loopback, loopback2;
    logic [1:0] data_dly;   
    logic [10:0] rx_addr;
    logic [7:0] rx_data;
@@ -151,8 +151,6 @@ reg        mii_rx_byte_received_i, full, byte_sync, mii_rx_frame_i, rx_frame_old
 	   tx_enable_old <= tx_enable_i;
        end
 
-   assign o_edutrstn = rstn;
-
    always @(posedge clk_50) if (rx_byte_received_o)
      begin
 	rx_data_o3 <= rx_data_o2;
@@ -247,6 +245,7 @@ always @(posedge msoc_clk)
     oe_edutmdio <= 1'b0;
     o_edutmdio <= 1'b0;
     o_edutmdclk <= 1'b0;
+    o_edutrst <= 1'b0;
     sync <= 1'b0;
     ce_d_dly <= 1'b0;
     data_dly <= 2'b00;
@@ -262,7 +261,7 @@ always @(posedge msoc_clk)
         1: {data_dly,loopback2,loopback,cooked,mac_address[47:32]} <= core_lsu_wdata;
         2: begin tx_enable_dly <= 10; tx_packet_length <= core_lsu_wdata+6; end
         3: begin tx_enable_dly <= 0; tx_packet_length <= 0; end
-        4: begin {oe_edutmdio,o_edutmdio,o_edutmdclk} <= core_lsu_wdata; end
+        4: begin {o_edutrst,oe_edutmdio,o_edutmdio,o_edutmdclk} <= core_lsu_wdata; end
         6: begin sync = 0; end
      endcase
      sync |= byte_sync;
@@ -303,6 +302,8 @@ always @(posedge clk_50)
     12'b111????????? : framing_rdata = framing_rdata_pa;
     default: framing_rdata = 'h0;
     endcase
-    
+
+   assign o_edutrstn = ~o_edutrst;
+  
 endmodule // framing_top
 `default_nettype wire
