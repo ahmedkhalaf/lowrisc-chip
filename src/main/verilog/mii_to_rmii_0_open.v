@@ -113,7 +113,7 @@ output wire ip2intc_irpt);
      (
       .s_axi_aclk(s_axi_aclk),        // input wire s_axi_aclk
       .s_axi_aresetn(s_axi_aresetn),  // input wire s_axi_aresetn
-      .s_axi_awaddr(s_axi_awaddr[14:0]),    // input wire [14 : 0] s_axi_awaddr
+      .s_axi_awaddr(s_axi_awaddr[12:0]),    // input wire [14 : 0] s_axi_awaddr
       .s_axi_awprot(3'b0),            // input wire [2 : 0] s_axi_awprot
       .s_axi_awvalid(s_axi_awvalid),  // input wire s_axi_awvalid
       .s_axi_awready(s_axi_awready),  // output wire s_axi_awready
@@ -124,7 +124,7 @@ output wire ip2intc_irpt);
       .s_axi_bresp(s_axi_bresp),      // output wire [1 : 0] s_axi_bresp
       .s_axi_bvalid(s_axi_bvalid),    // output wire s_axi_bvalid
       .s_axi_bready(s_axi_bready),    // input wire s_axi_bready
-      .s_axi_araddr(s_axi_araddr[14:0]),    // input wire [14 : 0] s_axi_araddr
+      .s_axi_araddr(s_axi_araddr[12:0]),    // input wire [14 : 0] s_axi_araddr
       .s_axi_arprot(3'b0),            // input wire [2 : 0] s_axi_arprot
       .s_axi_arvalid(s_axi_arvalid),  // input wire s_axi_arvalid
       .s_axi_arready(s_axi_arready),  // output wire s_axi_arready

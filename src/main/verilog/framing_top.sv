@@ -30,13 +30,13 @@ output reg sync
 
 logic [12:0] core_lsu_addr_dly;   
 
-logic tx_enable_i, tx_byte_sent_o, tx_busy_o, rx_frame_o, rx_byte_received_o, rx_error_o;
+logic tx_enable_i, tx_byte_sent_o, tx_busy_o, rx_frame_o, rx_byte_received_o, rx_error, rx_error_o;
 logic mac_tx_enable, mac_tx_gap, mac_tx_byte_sent, mac_rx_frame, mac_rx_byte_received, mac_rx_error;
 logic [47:0] mac_address;
 logic  [7:0] rx_data_o1, rx_data_o2, rx_data_o3, rx_data_o, tx_data_i, mac_tx_data, mac_rx_data, mii_rx_data_i;
-logic [10:0] rx_frame_size_o, tx_frame_addr, rx_packet_length_o;   
+logic [10:0] rx_frame_size_o, tx_frame_addr, rx_packet_length, rx_packet_length_o;
 logic [15:0] tx_packet_length, tx_frame_size;
-logic        ce_d_dly;
+logic        ce_d_dly, rx_fcs_err, rx_fcs_err_o;
 logic [31:0] framing_rdata_pkt, framing_wdata_pkt, tx_fcs_o, rx_fcs_o;
 logic [3:0] framing_rdata_pa, tx_enable_dly;
 
@@ -45,7 +45,6 @@ reg [23:0] rx_byte, rx_nxt, rx_byte_dly;
 reg  [2:0] rx_pair;
 reg        mii_rx_byte_received_i, full, byte_sync, mii_rx_frame_i, rx_frame_old, rx_pa;
 
-   wire rx_fcs_err_o;
    wire [3:0] m_enb = (we_d ? core_lsu_be : 4'hF);
    logic edutmdio, o_edutmdclk, o_edutrst, cooked, tx_enable_old, loopback, loopback2;
    logic [1:0] data_dly;   
@@ -256,23 +255,29 @@ always @(posedge msoc_clk)
     edutmdio <= i_edutmdio;
     ce_d_dly <= ce_d;
     if (framing_sel&we_d&core_lsu_addr[11])
-    case(core_lsu_addr[5:2])
+      case(core_lsu_addr[5:2])
         0: mac_address[31:0] <= core_lsu_wdata;
         1: {data_dly,loopback2,loopback,cooked,mac_address[47:32]} <= core_lsu_wdata;
         2: begin tx_enable_dly <= 10; tx_packet_length <= core_lsu_wdata+6; end
         3: begin tx_enable_dly <= 0; tx_packet_length <= 0; end
         4: begin {o_edutrst,oe_edutmdio,o_edutmdio,o_edutmdclk} <= core_lsu_wdata; end
         6: begin sync = 0; end
-     endcase
-     sync |= byte_sync;
-     if (tx_busy_o && (tx_frame_size[12:2] > tx_packet_length))
-        begin
-           tx_enable_dly <= 0;
-        end
-     else if (1'b1 == |tx_enable_dly)
-          tx_enable_dly <= tx_enable_dly + 1'b1;
+      endcase
+       if (byte_sync & (~rx_pair[2]) & ~sync)
+         begin
+            sync = 1'b1;
+            rx_error <= rx_error_o;
+            rx_fcs_err <= rx_fcs_err_o;
+            rx_packet_length <= rx_packet_length_o;
+         end
+       if (tx_busy_o && (tx_frame_size[12:2] > tx_packet_length))
+         begin
+            tx_enable_dly <= 0;
+         end
+       else if (1'b1 == |tx_enable_dly)
+         tx_enable_dly <= tx_enable_dly + 1'b1;
     end
-
+   
 always @(posedge clk_50)
   if (!rstn)
     begin
@@ -290,13 +295,13 @@ always @(posedge clk_50)
 
    always @* casez({ce_d_dly,core_lsu_addr_dly[12:2]})
     12'b101??????000 : framing_rdata = mac_address[31:0];
-    12'b101??????001 : framing_rdata = {data_dly,loopback2,loopback,cooked,mac_address[47:32]};
-    12'b101??????010 : framing_rdata = {tx_frame_addr,tx_packet_length};
+    12'b101??????001 : framing_rdata = {data_dly, loopback2, loopback, cooked, mac_address[47:32]};
+    12'b101??????010 : framing_rdata = {tx_busy_o, 4'b0, tx_frame_addr, tx_packet_length};
     12'b101??????011 : framing_rdata = {tx_fcs_o};
     12'b101??????100 : framing_rdata = {i_edutmdio,oe_edutmdio,o_edutmdio,o_edutmdclk};
     12'b101??????101 : framing_rdata = {rx_fcs_o};
-    12'b101??????110 : framing_rdata = {rx_fcs_err_o, sync};
-    12'b101??????111 : framing_rdata = {rx_error_o,rx_frame_size_o,5'b0,rx_packet_length_o};
+    12'b101??????110 : framing_rdata = {sync};
+    12'b101??????111 : framing_rdata = {rx_fcs_err, rx_error, 3'b0, rx_frame_size_o, 5'b0, rx_packet_length};
     12'b100????????? : framing_rdata = framing_rdata_pkt;
     12'b110????????? : framing_rdata = framing_wdata_pkt;
     12'b111????????? : framing_rdata = framing_rdata_pa;

@@ -1250,7 +1250,7 @@ reg phy_emdio_i, io_emdio_o, io_emdio_t;
       );
 
    // interrupt
-   assign interrupt = {62'b0, spi_irq, uart_irq};
+   assign interrupt = {61'b0, eth_irq, spi_irq, uart_irq};
 
    /////////////////////////////////////////////////////////////
    // IO memory crossbar
