@@ -28,6 +28,10 @@
   `define SIMULATION
  `endif
 
+ `ifndef BOOT_MEM
+  `define BOOT_MEM "boot.mem"
+ `endif
+
  // The following should be indicated but can be directly enabled
  // SIMULATION            : simulation
  // FPGA                  : FPGA implementation
