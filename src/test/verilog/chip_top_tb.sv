@@ -204,4 +204,10 @@ module tb;
   wire [15:0]  o_led ;
   wire [15:0]  i_dip ;
 
+   assign i_dip = 8'h88;
+   assign i_emdint = 1'b1;
+   assign i_erx_dv = o_etx_en;
+   assign i_erxd = o_etxd;
+   assign i_erx_er = 1'b0;
+   
 endmodule // tb

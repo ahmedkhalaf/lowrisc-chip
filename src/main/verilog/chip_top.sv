@@ -1043,7 +1043,7 @@ reg phy_emdio_i, io_emdio_o, io_emdio_t;
    /////////////////////////////////////////////////////////////
    // IO crossbar
 
-   localparam NUM_DEVICE = 3;
+   localparam NUM_DEVICE = 4;
 
    // output of the IO crossbar
    nasti_channel
