@@ -48,61 +48,73 @@ Corrections to pass formality verification by Jonathan Kimmitt, to whom all enqu
 `default_nettype none
 
 module framing(
-        tx_reset_i,
-        tx_clock_i,
-        rx_reset_i,
-        rx_clock_i,
-        mac_address_i,
-        tx_enable_i,
-        tx_data_i,
-        tx_byte_sent_o,
-	tx_fcs_o,
-        tx_busy_o,
-        rx_frame_o,
-        rx_data_o,
-        rx_byte_received_o,
-        rx_error_o,
-        rx_frame_size_o,
-        rx_packet_length_o,
-	rx_fcs_o,
-	rx_fcs_err_o,
-        mii_tx_enable_o,
-        mii_tx_data_o,
-        mii_tx_byte_sent_i,
-        mii_tx_gap_o,
-        mii_rx_frame_i,
-        mii_rx_data_i,
-        mii_rx_byte_received_i,
-        mii_rx_error_i
-    );
-    input wire tx_reset_i;
-    input wire tx_clock_i;
-    input wire rx_reset_i;
-    input wire rx_clock_i;
-    input wire [47:0]mac_address_i;
-    input wire tx_enable_i;
-    input wire [7:0]tx_data_i;
-    output tx_byte_sent_o;
-    output tx_busy_o;
-    output rx_frame_o;
-    output [7:0]rx_data_o;
-    output rx_byte_received_o;
-    output rx_error_o;
-    output wire [10:0]rx_frame_size_o;
-    output mii_tx_enable_o;
-    output [7:0]mii_tx_data_o;
-    input wire mii_tx_byte_sent_i;
-    output mii_tx_gap_o;
-    input wire mii_rx_frame_i;
-    input wire [7:0]mii_rx_data_i;
-    input wire mii_rx_byte_received_i;
-    input wire mii_rx_error_i;
-    output reg [31:0]rx_fcs_o;
-    output reg [31:0]tx_fcs_o;
-    output wire rx_fcs_err_o;
-    output reg [10:0]rx_packet_length_o;
+	input wire		tx_reset_i,
+	input wire		tx_clock_i,
+	input wire		rx_reset_i,
+	input wire		rx_clock_i,
+	input wire	[47:0] 	mac_address_i,
+	input wire		tx_enable_i,
+	input wire	[7:0] 	tx_data_i,
+	output wire		tx_byte_sent_o,
+	output reg	[31:0] 	tx_fcs_o,
+	output reg		tx_busy_o,
+	output reg		rx_frame_o,
+	output reg	[7:0] 	rx_data_o,
+	output reg		rx_byte_received_o,
+	output reg		rx_error_o,
+	output wire	[10:0] 	rx_frame_size_o,
+	output reg	[31:0] 	rx_fcs_o,
+	output reg		mii_tx_enable_o,
+	output reg	[7:0] 	mii_tx_data_o,
+	input wire		mii_tx_byte_sent_i,
+	output reg		mii_tx_gap_o,
+	input wire		mii_rx_frame_i,
+	input wire	[7:0] 	mii_rx_data_i,
+	input wire		mii_rx_byte_received_i,
+	input wire		mii_rx_error_i,
+   	output wire 		rx_fcs_err_o,
+   	output reg 	[10:0]	rx_packet_length_o);
    
-   localparam CRC32_POSTINVERT_MAGIC = 32'HC704DD7B;
+localparam CRC32_POSTINVERT_MAGIC = 32'b11000111000001001101110101111011;
+localparam CRC32_BYTES = (((31)-(0)+1) / 8);
+localparam [2:0]  MAC_ADDRESS_BYTES = 3'b110;
+localparam BROADCAST_MAC_ADDRESS = 48'b111111111111111111111111111111111111111111111111;
+localparam SPEED_1000MBPS = 2'b10;
+localparam SPEED_100MBPS = 2'b01;
+localparam SPEED_10MBPS = 2'b00;
+localparam SPEED_UNSPECIFIED = 2'b11;
+localparam PREAMBLE_DATA = 8'b01010101;
+localparam START_FRAME_DELIMITER_DATA = 8'b11010101;
+localparam PADDING_DATA = 8'b00000000;
+localparam MIN_FRAME_DATA_BYTES = ((46 + 2) + 6) + 6;
+localparam MAX_FRAME_DATA_BYTES = ((1500 + 2) + 6) + 6;
+localparam INTERPACKET_GAP_BYTES = 12;
+localparam PACKET_LENGTH_BITS = 11;
+localparam MAX_PACKET_LENGTH = (1 << PACKET_LENGTH_BITS) - 1;
+wire [32:0] CRC32_POLYNOMIAL = (1<<32)|(1<<26)|(1<<23)|(1<<22)|(1<<16)|(1<<12)|(1<<11)|(1<<10)|(1<<8)|(1<<7)|(1<<5)|(1<<4)|(1<<2)|(1<<1)|(1<<0);
+wire [3:0] TX_IDLE=0,
+TX_PREAMBLE2=1,
+TX_PREAMBLE3=2,
+TX_PREAMBLE4=3,
+TX_PREAMBLE5=4,
+TX_PREAMBLE6=5,
+TX_PREAMBLE7=6,
+TX_START_FRAME_DELIMITER=7,
+TX_CLIENT_DATA_WAIT_SOURCE_ADDRESS=8,
+TX_SOURCE_ADDRESS=9,
+TX_CLIENT_DATA=10,
+TX_PAD=11,
+TX_FRAME_CHECK_SEQUENCE2=12,
+TX_FRAME_CHECK_SEQUENCE3=13,
+TX_FRAME_CHECK_SEQUENCE4=14,
+TX_INTERPACKET_GAP=15;
+wire [2:0] RX_WAIT_START_FRAME_DELIMITER=0,
+RX_DATA=1,
+RX_ERROR=2,
+RX_SKIP_FRAME=3,
+RX_WAIT=4;
+   
+wire FALSE=1'b0,TRUE=1'b1;
    
     function [7:0] extract_byte;
        input [47:0] vec;
@@ -148,22 +160,13 @@ module framing(
        
     endfunction 
 
-    reg tx_byte_sent_o;
     reg [3:0]tx_state;
-    reg mii_tx_enable_o;
-    reg tx_busy_o;
-    reg [7:0]mii_tx_data_o;
-    reg mii_tx_gap_o;
     reg [6:0]tx_padding_required;
     reg [31:0]tx_frame_check_sequence;
     reg [2:0]tx_mac_address_byte;
     reg [3:0]tx_interpacket_gap_counter;
     reg [2:0]rx_state;
     reg [2:0]rx_padding;
-    reg rx_error_o;
-    reg [7:0]rx_data_o;
-    reg rx_byte_received_o;
-    reg rx_frame_o;
     reg [2:0]rx_mac_address_byte;
     reg rx_is_group_address;
     reg [10:0]rx_frame_size;
@@ -175,24 +178,12 @@ module framing(
     assign rx_frame_size_o = rx_frame_size;
     assign rx_fcs_err_o = rx_fcs_err;
     assign rx_fcs_err = rx_frame_check_sequence != CRC32_POSTINVERT_MAGIC;
-   
-    always @ (  tx_state or  mii_tx_byte_sent_i)
-    begin
-        if ( ( ( ( tx_state == 'b1010 ) | ( tx_state == 'b1000 ) ) | ( tx_state == 'b1001 ) ) & ( mii_tx_byte_sent_i == 1'b1 ) ) 
-        begin
-            tx_byte_sent_o <= 1'b1;
-        end
-        else
-        begin 
-            begin
-                tx_byte_sent_o <= 1'b0;
-            end
-        end
-    end
+    assign tx_byte_sent_o = (((tx_state == TX_CLIENT_DATA | tx_state == TX_CLIENT_DATA_WAIT_SOURCE_ADDRESS) | tx_state == TX_SOURCE_ADDRESS) && mii_tx_byte_sent_i ==  1'b1) ?  1'b1 :  1'b0;
+
     always @ ( posedge tx_clock_i)
-        if ( tx_reset_i ) 
+  if (tx_reset_i ==  1'b1)
         begin
-            tx_state <= 'b0;
+  tx_state <= TX_IDLE;
             mii_tx_enable_o <= 1'b0;
             tx_busy_o <= 1'b1;
             tx_padding_required <= 0;
@@ -204,12 +195,12 @@ module framing(
             begin
                 mii_tx_enable_o <= 1'b0;
                 tx_busy_o <= 1'b0;
-                if ( tx_state == 'b0 ) 
+  if (tx_state == TX_IDLE)
                 begin
                     if ( tx_enable_i == 1'b1 ) 
                     begin
-                        tx_state <= 1'b1;
-                        mii_tx_data_o <= 8'b01010101;
+        tx_state <= TX_PREAMBLE2;
+          mii_tx_data_o <= PREAMBLE_DATA;
                         mii_tx_enable_o <= 1'b1;
                         mii_tx_gap_o <= 1'b0;
                         tx_busy_o <= 1'b1;
@@ -225,128 +216,125 @@ module framing(
                         data_out = 8'b0;
                         update_fcs = 'b0;
                         case ( tx_state ) 
-                        'b0:
+            TX_IDLE:
                         begin
                         end
-                        'b1, 
-                        'b10, 
-                        'b11, 
-                        'b100, 
-                        'b101:
+            TX_PREAMBLE2, TX_PREAMBLE3, TX_PREAMBLE4, TX_PREAMBLE5, TX_PREAMBLE6:
                         begin
-                            tx_state <= tx_state + 3'b001;
-                            data_out = 8'b01010101;
+            tx_state <= tx_state+1;
+              data_out = PREAMBLE_DATA;
                         end
-                        'b110:
+            TX_PREAMBLE7:
                         begin
-                            tx_state <= 3'b111;
-                            data_out = 8'b01010101;
+            tx_state <= TX_START_FRAME_DELIMITER;
+              data_out = PREAMBLE_DATA;
                         end
-                        'b111:
+            TX_START_FRAME_DELIMITER:
                         begin
-                           tx_state <= 'b1010; // was 'b1000;
-                            data_out = 8'b11010101;
-                            tx_padding_required <= ( 46 + 2 + 6 + 6 );
+            tx_state <= TX_CLIENT_DATA;
+              data_out = START_FRAME_DELIMITER_DATA;
+              tx_padding_required <= MIN_FRAME_DATA_BYTES;
+
                             tx_frame_check_sequence <= { 32{1'b1} };
                             tx_mac_address_byte <= 3'b000;
                         end
-                        'b1000:
+            TX_CLIENT_DATA_WAIT_SOURCE_ADDRESS:
                         begin
-                            data_out = tx_data_i;
-                            update_fcs = 1'b1;
-                            if ( tx_mac_address_byte < 3'b110 ) 
+            data_out = tx_data_i;
+              update_fcs = TRUE;
+              if (tx_mac_address_byte < MAC_ADDRESS_BYTES)
                             begin
-                                tx_mac_address_byte <= ( tx_mac_address_byte + 3'b001 );
+                tx_mac_address_byte <= tx_mac_address_byte + 3'b001;
                             end
                             else
                             begin 
                                 if ( tx_data_i == 8'b11111111 ) 
                                 begin
-                                    tx_state <= 'b1001;
-                                    data_out = mac_address_i[7:0];
+                    tx_state <= TX_SOURCE_ADDRESS;
+                      data_out = mac_address_i[7:0] ;
                                     tx_mac_address_byte <= 3'b001;
                                 end
                                 else
                                 begin 
-                                    tx_state <= 'b1010;
+                    tx_state <= TX_CLIENT_DATA;
                                 end
                             end
                             if ( tx_enable_i == 1'b0 ) 
                             begin
-                                tx_state <= 'b1011;
-                                data_out = 8'b00000000;
+                tx_state <= TX_PAD;
+                  data_out = PADDING_DATA;
                             end
                         end
-                        'b1001:
+            TX_SOURCE_ADDRESS:
                         begin
-                            data_out = extract_byte(mac_address_i,tx_mac_address_byte);
-                            update_fcs = 1'b1;
-                            if ( tx_mac_address_byte < ( 3'b110 - 3'b001 ) ) 
+            data_out = extract_byte(mac_address_i, tx_mac_address_byte);
+              update_fcs = TRUE;
+              if (tx_mac_address_byte < (MAC_ADDRESS_BYTES - 3'b001))
                             begin
-                                tx_mac_address_byte <= ( tx_mac_address_byte + 3'b001 );
+                tx_mac_address_byte <= tx_mac_address_byte + 3'b001;
                             end
                             else
                             begin 
-                                tx_state <= 'b1010;
+                tx_state <= TX_CLIENT_DATA;
                             end
                         end
-                        'b1010:
+            TX_CLIENT_DATA:
                         begin
-                            data_out = tx_data_i;
-                            update_fcs = 1'b1;
+            data_out = tx_data_i;
+              update_fcs = TRUE;
                             if ( tx_enable_i == 1'b0 ) 
                             begin
                                 if ( tx_padding_required == 0 ) 
                                 begin
-                                    tx_state <= 'b1100;
-                                    data_out = fcs_output_byte(tx_frame_check_sequence,0);
-                                    update_fcs = 'b0;
+                    tx_state <= TX_FRAME_CHECK_SEQUENCE2;
+                      data_out = fcs_output_byte(tx_frame_check_sequence, 0);
+                      update_fcs = FALSE;
                                 end
                                 else
                                 begin 
-                                    tx_state <= 'b1011;
-                                    data_out = 8'b00000000;
+                    tx_state <= TX_PAD;
+                      data_out = PADDING_DATA;
                                 end
                             end
                         end
-                        'b1011:
+            TX_PAD:
                         begin
-                            data_out = 8'b00000000;
-                            update_fcs = 1'b1;
+            data_out = PADDING_DATA;
+              update_fcs = TRUE;
                             if ( tx_padding_required == 0 ) 
                             begin
-                                tx_state <= 'b1100;
-                                data_out = fcs_output_byte(tx_frame_check_sequence,0);
-                                update_fcs = 'b0;
+                tx_state <= TX_FRAME_CHECK_SEQUENCE2;
+                  data_out = fcs_output_byte(tx_frame_check_sequence, 0);
+                  update_fcs = FALSE;
                             end
                         end
-                        'b1100:
+            TX_FRAME_CHECK_SEQUENCE2:
                         begin
-                            tx_state <= tx_state + 3'b001;
-                            data_out = fcs_output_byte(tx_frame_check_sequence,1);
+            tx_state <= tx_state+1;
+              data_out = fcs_output_byte(tx_frame_check_sequence, 1);
                         end
-                        'b1101:
+            TX_FRAME_CHECK_SEQUENCE3:
                         begin
-                            tx_state <= tx_state + 3'b001;
-                            data_out = fcs_output_byte(tx_frame_check_sequence,2);
+            tx_state <= tx_state+1;
+              data_out = fcs_output_byte(tx_frame_check_sequence, 2);
                         end
-                        'b1110:
+            TX_FRAME_CHECK_SEQUENCE4:
                         begin
-                            tx_state <= 4'b1111;
-                            data_out = fcs_output_byte(tx_frame_check_sequence,3);
-                            tx_interpacket_gap_counter <= 0;
+            tx_state <= TX_INTERPACKET_GAP;
+              data_out = fcs_output_byte(tx_frame_check_sequence, 3);
+              tx_interpacket_gap_counter <= 1'b0;
                         end
-                        'b1111:
+            TX_INTERPACKET_GAP:
                         begin
                             mii_tx_gap_o <= 1'b1;
-                            if ( tx_interpacket_gap_counter == ( 12 - 1 ) ) 
+              if (tx_interpacket_gap_counter == INTERPACKET_GAP_BYTES - 1)
                             begin
 			       tx_fcs_o <= tx_frame_check_sequence;
-                               tx_state <= 'b0;
+                  tx_state <= TX_IDLE;
                             end
                             else
                             begin 
-                                tx_interpacket_gap_counter <= ( tx_interpacket_gap_counter + 1 );
+                tx_interpacket_gap_counter <= tx_interpacket_gap_counter + 1;
                             end
                         end
                         endcase
@@ -355,11 +343,11 @@ module framing(
                         begin
                             tx_frame_check_sequence <= update_crc32(tx_frame_check_sequence,data_out);
                         end
-                        if ( ( ( ( tx_state == 'b1000 ) | ( tx_state == 'b1001 ) ) | ( tx_state == 'b1010 ) ) | ( tx_state == 'b1011 ) ) 
+if (((tx_state == TX_CLIENT_DATA_WAIT_SOURCE_ADDRESS | tx_state == TX_SOURCE_ADDRESS) | tx_state == TX_CLIENT_DATA) | tx_state == TX_PAD)
                         begin
                             if ( tx_padding_required > 0 ) 
                             begin
-                                tx_padding_required <= ( tx_padding_required - 1 );
+                tx_padding_required <= tx_padding_required - 1;
                             end
                         end
                     end
@@ -368,9 +356,10 @@ module framing(
         end
 
     always @ ( posedge rx_clock_i)
-        if ( rx_reset_i ) 
+  if (rx_reset_i ==  1'b1)
         begin
-           rx_state <= 'b0;
+  rx_state <= RX_WAIT_START_FRAME_DELIMITER;
+
            rx_fcs_o <= 32'b0;
         end
         else
@@ -381,7 +370,7 @@ module framing(
                 rx_byte_received_o <= 1'b0;
                 rx_frame_o <= 1'b0;
                 case ( rx_state ) 
-                'b0:
+    RX_WAIT_START_FRAME_DELIMITER:
                 begin
                     rx_mac_address_byte <= 3'b000;
                     rx_is_group_address <= 1'b1;
@@ -393,37 +382,37 @@ module framing(
                        if ( mii_rx_byte_received_i == 1'b1 ) 
                          begin
                             case ( mii_rx_data_i ) 
-                            8'b11010101:
-                            begin
-                                rx_state <= 'b1;
-                            end
-                            8'b01010101:
-                            begin
-                            end
+                START_FRAME_DELIMITER_DATA:
+                rx_state <= RX_DATA;
+                
+                PREAMBLE_DATA:
+                begin end
                             default :
-                            begin
-                                rx_state <= 'b11;
-                            end
+                rx_state <= RX_SKIP_FRAME;
                             endcase
                          end
                        if ( mii_rx_error_i == 1'b1 ) 
                          begin
-                            rx_state <= 'b11;
+            rx_state <= RX_SKIP_FRAME;
                          end
                     end
                 end
-                'b1:
+    RX_DATA:
                 begin
                     rx_frame_o <= 1'b1;
                     rx_byte_received_o <= mii_rx_byte_received_i;
                     if ( mii_rx_frame_i == 1'b0 ) 
                     begin
-                        rx_state <= 'b100;
+        rx_state <= RX_WAIT;
+
                         rx_padding <= 'b100;
 		        rx_fcs_o <= rx_frame_check_sequence;
 		        if ( rx_fcs_err == 0)
 			  rx_packet_length_o <= rx_frame_size;
-                        if ( ( ( ( mii_rx_error_i == 1'b1 ) | rx_fcs_err ) | ( rx_frame_size < ( ( 46 + 2 + 6 + 6 ) + ( 32 / 8 ) ) ) ) | ( rx_frame_size > ( ( 1500 + 2 + 6 + 6 ) + ( 32 / 8 ) ) ) )
+                        if ( ( ( ( mii_rx_error_i == 1'b1 ) |
+ rx_fcs_err ) |
+ ( rx_frame_size < MIN_FRAME_DATA_BYTES + CRC32_BYTES) |
+ ( rx_frame_size > MAX_FRAME_DATA_BYTES + CRC32_BYTES ) ) )
                         begin
                             rx_error_o <= 1'b1;
                         end
@@ -435,9 +424,9 @@ module framing(
                             rx_frame_check_sequence <= update_crc32(rx_frame_check_sequence,mii_rx_data_i);
                             if ( rx_frame_size < 1500 + 2 + 6 + 6 + 4 + 1 ) 
                             begin
-                                rx_frame_size <= ( rx_frame_size + 1 );
+                rx_frame_size <= rx_frame_size + 1;
                             end
-                            if ( rx_mac_address_byte < 3'b110 ) 
+if (rx_mac_address_byte < MAC_ADDRESS_BYTES)
                             begin
                                 if ( rx_mac_address_byte == 3'b000 ) 
                                 begin
@@ -446,7 +435,7 @@ module framing(
                                         rx_is_group_address <= 1'b0;
                                         if ( mii_rx_data_i != extract_byte(mac_address_i,rx_mac_address_byte) ) 
                                         begin
-                                            rx_state <= 'b10;
+                            rx_state <= RX_ERROR;
                                         end
                                     end
                                 end
@@ -456,7 +445,7 @@ module framing(
                                     begin
                                         if ( mii_rx_data_i != extract_byte(mac_address_i,rx_mac_address_byte) ) 
                                         begin
-                                            rx_state <= 'b10;
+                        rx_state <= RX_ERROR;
                                         end
                                     end
                                 end
@@ -465,27 +454,27 @@ module framing(
                         end
                         if ( mii_rx_error_i == 1'b1 ) 
                         begin
-                            rx_state <= 'b10;
+            rx_state <= RX_ERROR;
                         end
                     end
                 end
-                'b11:
+                RX_SKIP_FRAME:
                 begin
                     if ( mii_rx_frame_i == 1'b0 ) 
                     begin
-                        rx_state <= 'b0;
+      rx_state <= RX_WAIT_START_FRAME_DELIMITER;
                     end
                 end
-                'b10:
+                RX_ERROR:
                 begin
                     rx_frame_o <= 1'b1;
                     rx_error_o <= 1'b1;
                     if ( mii_rx_frame_i == 1'b0 ) 
                     begin
-                        rx_state <= 'b0;
+        rx_state <= RX_WAIT_START_FRAME_DELIMITER;
                     end
                 end
-                'b100:
+                RX_WAIT:
                 begin
                     rx_frame_o <= 1'b1;
                     rx_byte_received_o <= mii_rx_byte_received_i;
