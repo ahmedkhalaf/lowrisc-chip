@@ -73,7 +73,8 @@ module framing(
 	input wire		mii_rx_byte_received_i,
 	input wire		mii_rx_error_i,
    	output wire 		rx_fcs_err_o,
-   	output reg 	[10:0]	rx_packet_length_o);
+   	output reg 	[10:0]	rx_packet_length_o,
+        input wire              promiscuous_i);
    
 localparam CRC32_POSTINVERT_MAGIC = 32'b11000111000001001101110101111011;
 localparam CRC32_BYTES = (((31)-(0)+1) / 8);
@@ -430,7 +431,7 @@ if (rx_mac_address_byte < MAC_ADDRESS_BYTES)
                             begin
                                 if ( rx_mac_address_byte == 3'b000 ) 
                                 begin
-                                    if ( mii_rx_data_i[0] == 1'b0 ) 
+                                    if ( ( mii_rx_data_i[0] == 1'b0 ) && ( promiscuous_i == 1'b0) )
                                     begin
                                         rx_is_group_address <= 1'b0;
                                         if ( mii_rx_data_i != extract_byte(mac_address_i,rx_mac_address_byte) ) 

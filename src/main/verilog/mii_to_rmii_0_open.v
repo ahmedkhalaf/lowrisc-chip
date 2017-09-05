@@ -66,8 +66,7 @@
 `default_nettype none
 
 module mii_to_rmii_0_open(
-input wire clk_50,
-input wire clk_100,
+input wire clk_rmii,
 input wire locked,
 // SMSC ethernet PHY
 output wire eth_rstn,
@@ -83,21 +82,39 @@ output wire phy_mdio_o,
 output wire phy_mdio_t,
 input wire s_axi_aclk,
 input wire s_axi_aresetn,
-input wire[31:0] s_axi_awaddr,
+input wire [7:0]s_axi_awid,
+input wire [31:0]s_axi_awaddr,
+input wire [7:0]s_axi_awlen,
+input wire [2:0]s_axi_awsize,
+input wire [1:0]s_axi_awburst,
+input wire s_axi_awlock,
+input wire [3:0]s_axi_awcache,
+input wire [2:0]s_axi_awprot,
 input wire s_axi_awvalid,
 output wire s_axi_awready,
-input wire[31:0] s_axi_wdata,
-input wire[3:0] s_axi_wstrb,
+input wire [31:0]s_axi_wdata,
+input wire [3:0]s_axi_wstrb,
+input wire s_axi_wlast,
 input wire s_axi_wvalid,
 output wire s_axi_wready,
-output wire[1:0] s_axi_bresp,
+output wire [7:0] s_axi_bid,
+output wire [1:0]s_axi_bresp,
 output wire s_axi_bvalid,
 input wire s_axi_bready,
-input wire[31:0] s_axi_araddr,
+input wire [7:0] s_axi_arid,
+input wire [31:0]s_axi_araddr,
+input wire [7:0]s_axi_arlen,
+input wire [2:0]s_axi_arsize,
+input wire [1:0]s_axi_arburst,
+input wire s_axi_arlock,
+input wire [3:0]s_axi_arcache,
+input wire [2:0]s_axi_arprot,
 input wire s_axi_arvalid,
 output wire s_axi_arready,
-output wire[31:0] s_axi_rdata,
-output wire[1:0] s_axi_rresp,
+output wire [7:0] s_axi_rid,
+output wire [31:0]s_axi_rdata,
+output wire [1:0]s_axi_rresp,
+output wire s_axi_rlast,
 output wire s_axi_rvalid,
 input wire s_axi_rready,
 output wire ip2intc_irpt);
@@ -113,23 +130,39 @@ output wire ip2intc_irpt);
      (
       .s_axi_aclk(s_axi_aclk),        // input wire s_axi_aclk
       .s_axi_aresetn(s_axi_aresetn),  // input wire s_axi_aresetn
-      .s_axi_awaddr(s_axi_awaddr[12:0]),    // input wire [14 : 0] s_axi_awaddr
-      .s_axi_awprot(3'b0),            // input wire [2 : 0] s_axi_awprot
+      .s_axi_awid(s_axi_awid),        // input wire [7 : 0] s_axi_awid
+      .s_axi_awaddr(s_axi_awaddr[12:0]),    // input wire [12 : 0] s_axi_awaddr
+      .s_axi_awlen(s_axi_awlen),      // input wire [7 : 0] s_axi_awlen
+      .s_axi_awsize(s_axi_awsize),    // input wire [2 : 0] s_axi_awsize
+      .s_axi_awburst(s_axi_awburst),  // input wire [1 : 0] s_axi_awburst
+      .s_axi_awlock(s_axi_awlock),    // input wire s_axi_awlock
+      .s_axi_awcache(s_axi_awcache),  // input wire [3 : 0] s_axi_awcache
+      .s_axi_awprot(s_axi_awprot),    // input wire [2 : 0] s_axi_awprot
       .s_axi_awvalid(s_axi_awvalid),  // input wire s_axi_awvalid
       .s_axi_awready(s_axi_awready),  // output wire s_axi_awready
       .s_axi_wdata(s_axi_wdata),      // input wire [31 : 0] s_axi_wdata
       .s_axi_wstrb(s_axi_wstrb),      // input wire [3 : 0] s_axi_wstrb
+      .s_axi_wlast(s_axi_wlast),      // input wire s_axi_wlast
       .s_axi_wvalid(s_axi_wvalid),    // input wire s_axi_wvalid
       .s_axi_wready(s_axi_wready),    // output wire s_axi_wready
+      .s_axi_bid(s_axi_bid),          // output wire [7 : 0] s_axi_bid
       .s_axi_bresp(s_axi_bresp),      // output wire [1 : 0] s_axi_bresp
       .s_axi_bvalid(s_axi_bvalid),    // output wire s_axi_bvalid
       .s_axi_bready(s_axi_bready),    // input wire s_axi_bready
-      .s_axi_araddr(s_axi_araddr[12:0]),    // input wire [14 : 0] s_axi_araddr
-      .s_axi_arprot(3'b0),            // input wire [2 : 0] s_axi_arprot
+      .s_axi_arid(s_axi_arid),        // input wire [7 : 0] s_axi_arid
+      .s_axi_araddr(s_axi_araddr[12:0]),    // input wire [12 : 0] s_axi_araddr
+      .s_axi_arlen(s_axi_arlen),      // input wire [7 : 0] s_axi_arlen
+      .s_axi_arsize(s_axi_arsize),    // input wire [2 : 0] s_axi_arsize
+      .s_axi_arburst(s_axi_arburst),  // input wire [1 : 0] s_axi_arburst
+      .s_axi_arlock(s_axi_arlock),    // input wire s_axi_arlock
+      .s_axi_arcache(s_axi_arcache),  // input wire [3 : 0] s_axi_arcache
+      .s_axi_arprot(s_axi_arprot),    // input wire [2 : 0] s_axi_arprot
       .s_axi_arvalid(s_axi_arvalid),  // input wire s_axi_arvalid
       .s_axi_arready(s_axi_arready),  // output wire s_axi_arready
+      .s_axi_rid(s_axi_rid),          // output wire [7 : 0] s_axi_rid
       .s_axi_rdata(s_axi_rdata),      // output wire [31 : 0] s_axi_rdata
       .s_axi_rresp(s_axi_rresp),      // output wire [1 : 0] s_axi_rresp
+      .s_axi_rlast(s_axi_rlast),      // output wire s_axi_rlast
       .s_axi_rvalid(s_axi_rvalid),    // output wire s_axi_rvalid
       .s_axi_rready(s_axi_rready),    // input wire s_axi_rready
       .bram_rst_a(bram_rst_a),        // output wire bram_rst_a
@@ -145,8 +178,7 @@ framing_top open
   (
    .rstn(locked),
    .msoc_clk(s_axi_aclk),
-   .clk_50(clk_50),
-   .clk_100(clk_100),
+   .clk_rmii(clk_rmii),
    .core_lsu_addr(bram_addr_a),
    .core_lsu_wdata(bram_wrdata_a),
    .core_lsu_be(bram_we_a),
