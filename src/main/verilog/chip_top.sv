@@ -498,7 +498,8 @@ reg phy_emdio_i, io_emdio_o, io_emdio_t;
        )
    io_bridge
      (
-      .*,
+      .clk    ( clk                ),
+      .rstn   ( rstn               ),
       .nasti_master  ( io_io_nasti  ),
       .lite_slave    ( io_lite      )
       );
@@ -530,7 +531,8 @@ reg phy_emdio_i, io_emdio_o, io_emdio_t;
        .SLAVE_DATA_WIDTH  ( `LOWRISC_IO_DAT_WIDTH ))
    bram_narrower
      (
-      .*,
+      .clk    ( clk               ),
+      .rstn   ( rstn              ),
       .master ( io_bram_nasti     ),
       .slave  ( local_bram_nasti  )
       );
@@ -652,7 +654,8 @@ reg phy_emdio_i, io_emdio_o, io_emdio_t;
        .SLAVE_DATA_WIDTH  ( `LOWRISC_IO_DAT_WIDTH ))
    flash_narrower
      (
-      .*,
+      .clk    ( clk                ),
+      .rstn   ( rstn               ),
       .master ( io_flash_nasti     ),
       .slave  ( local_flash_nasti  )
       );
@@ -775,7 +778,8 @@ reg phy_emdio_i, io_emdio_o, io_emdio_t;
        )
    spi_i
      (
-      .*,
+      .clk             ( clk                   ),
+      .rstn            ( rstn                  ),
       .nasti           ( io_spi_lite           ),
       .io0_i           ( spi_mosi_i            ),
       .io0_o           ( spi_mosi_o            ),
@@ -790,7 +794,7 @@ reg phy_emdio_i, io_emdio_o, io_emdio_t;
       .ss_o            ( spi_cs_o              ),
       .ss_t            ( spi_cs_t              ),
       .ip2intc_irpt    ( spi_irq               ), // polling for now
-      .sd_reset()
+      .sd_reset	       ( sd_reset              )
       );
 
 
@@ -854,7 +858,8 @@ reg phy_emdio_i, io_emdio_o, io_emdio_t;
        )
    u_debug_system
      (
-      .*,
+      .clk             ( clk                    ),
+      .rstn            ( rstn                   ),
       .clk_io          ( clk_io_uart            ),
       .uart_irq        ( uart_irq               ),
       .uart_ar_addr    ( io_uart_lite.ar_addr   ),
@@ -993,9 +998,10 @@ reg phy_emdio_i, io_emdio_o, io_emdio_t;
        .SLAVE_DATA_WIDTH  ( `LOWRISC_IO_DAT_WIDTH ))
    eth_narrower
      (
-      .*,
-      .master ( io_eth_nasti     ),
-      .slave  ( local_eth_nasti  )
+      .clk    ( clk                ),
+      .rstn   ( rstn               ),
+      .master ( io_eth_nasti       ),
+      .slave  ( local_eth_nasti    )
       );
 
     logic [1:0] eth_txd;
@@ -1147,9 +1153,10 @@ reg phy_emdio_i, io_emdio_o, io_emdio_t;
        )
    io_crossbar
      (
-      .*,
-      .master ( io_lite     ),
-      .slave  ( io_cbo_lite )
+      .clk    ( clk                ),
+      .rstn   ( rstn               ),
+      .master ( io_lite            ),
+      .slave  ( io_cbo_lite        )
       );
 
  `ifdef ADD_HOST
@@ -1339,9 +1346,10 @@ reg phy_emdio_i, io_emdio_o, io_emdio_t;
        )
    io_mem_crossbar
      (
-      .*,
-      .master ( io_nasti         ),
-      .slave  ( io_mem_cbo_nasti )
+      .clk    ( clk                ),
+      .rstn   ( rstn               ),
+      .master ( io_nasti           ),
+      .slave  ( io_mem_cbo_nasti   )
       );
 
  `ifdef ADD_BRAM
