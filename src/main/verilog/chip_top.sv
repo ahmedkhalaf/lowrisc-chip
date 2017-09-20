@@ -1065,7 +1065,7 @@ reg phy_emdio_i, io_emdio_o, io_emdio_t;
       .phy_mdio_i  ( phy_emdio_i ),
       .phy_mdio_o  ( phy_emdio_o ),
       .phy_mdio_t  ( phy_emdio_t ),
-      .ip2intc_irpt( eth_irq ),
+      .eth_irq     ( eth_irq ),
       .s_axi_aclk      ( clk                  ),
       .s_axi_aresetn   ( rstn                 ),
       .s_axi_arid      ( local_eth_nasti.ar_id    ),

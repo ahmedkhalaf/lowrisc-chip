@@ -25,7 +25,7 @@ output reg  o_edutmdio   ,
 output reg  oe_edutmdio   ,
 output wire   o_edutrstn    ,   
 
-output reg sync
+output reg eth_irq
    );
 
 logic [12:0] core_lsu_addr_dly;   
@@ -43,7 +43,7 @@ logic [3:0] framing_rdata_pa, tx_enable_dly;
 reg [12:0] addr_tap, nxt_addr;
 reg [23:0] rx_byte, rx_nxt, rx_byte_dly;
 reg  [2:0] rx_pair;
-reg        mii_rx_byte_received_i, full, byte_sync, mii_rx_frame_i, rx_frame_old, rx_pa;
+reg        mii_rx_byte_received_i, full, byte_sync, sync, irq_en, mii_rx_frame_i, rx_frame_old, rx_pa;
 
    wire [3:0] m_enb = (we_d ? core_lsu_be : 4'hF);
    logic edutmdio, o_edutmdclk, o_edutrst, cooked, tx_enable_old, loopback, loopback2, promiscuous;
@@ -248,6 +248,8 @@ always @(posedge msoc_clk)
     o_edutmdclk <= 1'b0;
     o_edutrst <= 1'b0;
     sync <= 1'b0;
+    eth_irq <= 1'b0;
+    irq_en <= 1'b0;
     ce_d_dly <= 1'b0;
     data_dly <= 2'b00;
     end
@@ -259,15 +261,16 @@ always @(posedge msoc_clk)
     if (framing_sel&we_d&core_lsu_addr[11])
       case(core_lsu_addr[5:2])
         0: mac_address[31:0] <= core_lsu_wdata;
-        1: {promiscuous,data_dly,loopback2,loopback,cooked,mac_address[47:32]} <= core_lsu_wdata;
+        1: {irq_en,promiscuous,data_dly,loopback2,loopback,cooked,mac_address[47:32]} <= core_lsu_wdata;
         2: begin tx_enable_dly <= 10; tx_packet_length <= core_lsu_wdata+6; end
         3: begin tx_enable_dly <= 0; tx_packet_length <= 0; end
         4: begin {o_edutrst,oe_edutmdio,o_edutmdio,o_edutmdclk} <= core_lsu_wdata; end
-        6: begin sync = 0; end
+        6: begin sync = 0; eth_irq <= 0; end
       endcase
        if (byte_sync & (~rx_pair[2]) & ~sync)
          begin
             sync = 1'b1;
+            eth_irq <= irq_en;
             rx_error <= rx_error_o;
             rx_fcs_err <= rx_fcs_err_o;
             rx_packet_length <= rx_packet_length_o;
@@ -297,12 +300,12 @@ always @(posedge clk_rmii)
 
    always @* casez({ce_d_dly,core_lsu_addr_dly[12:2]})
     12'b101??????000 : framing_rdata = mac_address[31:0];
-    12'b101??????001 : framing_rdata = {promiscuous, data_dly, loopback2, loopback, cooked, mac_address[47:32]};
+    12'b101??????001 : framing_rdata = {irq_en, promiscuous, data_dly, loopback2, loopback, cooked, mac_address[47:32]};
     12'b101??????010 : framing_rdata = {tx_busy_o, 4'b0, tx_frame_addr, tx_packet_length};
     12'b101??????011 : framing_rdata = {tx_fcs_o};
     12'b101??????100 : framing_rdata = {i_edutmdio,oe_edutmdio,o_edutmdio,o_edutmdclk};
     12'b101??????101 : framing_rdata = {rx_fcs_o};
-    12'b101??????110 : framing_rdata = {sync};
+    12'b101??????110 : framing_rdata = {eth_irq, sync};
     12'b101??????111 : framing_rdata = {rx_fcs_err, rx_error, 3'b0, rx_frame_size_o, 5'b0, rx_packet_length};
     12'b100????????? : framing_rdata = framing_rdata_pkt;
     12'b110????????? : framing_rdata = framing_wdata_pkt;

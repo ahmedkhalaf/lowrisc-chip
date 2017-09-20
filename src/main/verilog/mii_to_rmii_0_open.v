@@ -117,7 +117,7 @@ output wire [1:0]s_axi_rresp,
 output wire s_axi_rlast,
 output wire s_axi_rvalid,
 input wire s_axi_rready,
-output wire ip2intc_irpt);
+output wire eth_irq);
 
    wire     bram_rst_a;
    wire     bram_clk_a;
@@ -197,7 +197,7 @@ framing_top open
    .o_edutmdio(phy_mdio_o),
    .oe_edutmdio(phy_mdio_t),
    .o_edutrstn(eth_rstn),
-   .sync(ip2intc_irpt)
+   .eth_irq(eth_irq)
 );
 
 endmodule
