@@ -258,6 +258,7 @@ always @(posedge msoc_clk)
     core_lsu_addr_dly <= core_lsu_addr;
     edutmdio <= i_edutmdio;
     ce_d_dly <= ce_d;
+    eth_irq <= sync & irq_en; // make eth_irq go away immediately if irq_en is low
     if (framing_sel&we_d&core_lsu_addr[11])
       case(core_lsu_addr[5:2])
         0: mac_address[31:0] <= core_lsu_wdata;
@@ -265,12 +266,11 @@ always @(posedge msoc_clk)
         2: begin tx_enable_dly <= 10; tx_packet_length <= core_lsu_wdata+6; end
         3: begin tx_enable_dly <= 0; tx_packet_length <= 0; end
         4: begin {o_edutrst,oe_edutmdio,o_edutmdio,o_edutmdclk} <= core_lsu_wdata; end
-        6: begin sync = 0; eth_irq <= 0; end
+        6: begin sync = 0; end
       endcase
        if (byte_sync & (~rx_pair[2]) & ~sync)
          begin
             sync = 1'b1;
-            eth_irq <= irq_en;
             rx_error <= rx_error_o;
             rx_fcs_err <= rx_fcs_err_o;
             rx_packet_length <= rx_packet_length_o;
