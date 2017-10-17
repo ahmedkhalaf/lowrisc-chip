@@ -33,6 +33,7 @@ include $(base_dir)/Makefrag
 
 lowrisc_srcs = \
 	$(generated_dir)/$(MODEL).$(CONFIG).sv \
+	$(generated_dir)/CoreplexTop.$(CONFIG).behav_srams.sv \
 
 lowrisc_headers = \
 	$(generated_dir)/consts.vh \
@@ -170,6 +171,7 @@ tb_top = chip_top
 
 veri_flags = \
 	+incdir+$(generated_dir) \
+	+incdir+$(base_dir)/vsrc \
 	+incdir+$(base_dir)/src/main/verilog \
 	+incdir+$(base_dir)/socip/nasti \
 	+incdir+$(base_dir)/minion_subsystem/verilog \
@@ -196,6 +198,17 @@ veri_dbg_flags = --Mdir $(sim_dir)/verilator.debug --trace -O1 -CFLAGS "-O3 -DDE
 #--------------------------------------------------------------------
 # Build the simulator (verilator)
 #--------------------------------------------------------------------
+
+behav_sram: $(generated_dir)/CoreplexTop.$(CONFIG).behav_srams.sv
+
+$(generated_dir)/CoreplexTop.$(CONFIG).behav_srams.sv: $(generated_dir)/CoreplexTop.$(CONFIG).conf
+	../scripts/vlsi_mem_gen $(generated_dir)/CoreplexTop.$(CONFIG).conf > $(generated_dir)/CoreplexTop.$(CONFIG).behav_srams.sv.tmp
+	mv -f $(generated_dir)/CoreplexTop.$(CONFIG).behav_srams.sv.tmp $(generated_dir)/CoreplexTop.$(CONFIG).behav_srams.sv
+
+$(generated_dir)/dev_map.vh $(generated_dir)/dev_map.h: $(generated_dir)/$(CONFIG).json
+	make -C ../scripts ./cnvjson
+	../scripts/cnvjson $< $(generated_dir)/dev_map.vh $(generated_dir)/dev_map.h
+
 verilator: verilator.norm.log
 verilator.norm.log: $(lowrisc_srcs) $(lowrisc_headers) $(verilog_srcs) $(verilog_headers) $(test_verilog_srcs) $(test_cxx_srcs) $(test_cxx_headers)
 	rm -fr $(sim_dir)/verilator.norm
@@ -206,7 +219,7 @@ $(CONFIG)-sim: verilator.norm.log
 	VM_PARALLEL_BUILDS=1 $(MAKE) -C verilator.norm -f V$(tb_top).mk
 
 verilator.debug.log: $(lowrisc_srcs) $(lowrisc_headers) $(verilog_srcs) $(verilog_headers) $(test_verilog_srcs) $(test_cxx_srcs) $(test_cxx_headers)
-	rm -fr $(sim_dir)/verilator.debug
+	rm -fr $(sim_dir)/verilator.debug $(generated_dir)/CoreplexTop.$(CONFIG).behav_srams.sv
 	$(veri) --cc $(lowrisc_srcs) $(verilog_srcs) $(test_verilog_srcs) $(test_cxx_srcs) $(veri_flags) $(veri_dbg_flags) -o ../$(CONFIG)-sim-debug | tee $@
 
 sim-debug: $(CONFIG)-sim-debug

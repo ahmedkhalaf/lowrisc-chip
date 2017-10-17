@@ -16,3 +16,8 @@ all: $(PROGRAMS)
 
 clean:
 	rm -f $(OBJS) $(PROGRAMS)
+
+LIB= /home/jrrk2/.opam/4.02.3/lib
+
+cnvjson: cnvjson.ml
+	ocamlopt -o $@ -I $(LIB)/yojson $(LIB)/biniou/biniou.cmxa $(LIB)/easy-format/easy_format.cmxa $(LIB)/yojson/yojson.cmxa cnvjson.ml
