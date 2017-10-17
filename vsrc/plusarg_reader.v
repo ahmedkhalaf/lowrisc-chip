@@ -12,9 +12,11 @@ assign out = DEFAULT;
 reg [31:0] myplus;
 assign out = myplus;
 
+`ifndef VERILATOR   
 initial begin
    if (!$value$plusargs(FORMAT, myplus)) myplus = DEFAULT;
 end
+`endif
 `endif
 
 endmodule

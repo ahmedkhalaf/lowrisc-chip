@@ -18,19 +18,19 @@ module SimDTM(
   output [31:0] exit
 );
 
-  bit r_reset;
+  reg r_reset;
 
   wire #0.1 __debug_req_ready = debug_req_ready;
   wire #0.1 __debug_resp_valid = debug_resp_valid;
   wire [31:0] #0.1 __debug_resp_bits_resp = {30'b0, debug_resp_bits_resp};
   wire [31:0] #0.1 __debug_resp_bits_data = debug_resp_bits_data;
 
-  bit __debug_req_valid;
-  int __debug_req_bits_addr;
-  int __debug_req_bits_op;
-  int __debug_req_bits_data;
-  bit __debug_resp_ready;
-  int __exit;
+  reg __debug_req_valid;
+  reg [31:0]  __debug_req_bits_addr;
+  reg [31:0]  __debug_req_bits_op;
+  reg [31:0]  __debug_req_bits_data;
+  reg __debug_resp_ready;
+  reg [31:0]  __exit;
 
   assign #0.1 debug_req_valid = __debug_req_valid;
   assign #0.1 debug_req_bits_addr = __debug_req_bits_addr[6:0];
