@@ -12,9 +12,11 @@ let rec iter lst =
                        let ix = String.index s '@' in
                        begin
                        let base = String.sub s (ix+1) (String.length s - ix - 1) in
-                       refnam := String.sub s 0 ix;
-                       Printf.fprintf fvh "  `define DEV_MAP__io_ext_%s__BASE 'h%s\n" !refnam base;
-                       Printf.fprintf fh "  #define DEV_MAP__io_ext_%s__BASE 0x%sllu\n" !refnam base;
+                       refnam := (match String.map (function '-' -> '_' | oth -> oth) (String.sub s 0 ix) with
+                         | "memory" -> "mem"
+                         | oth -> "io_ext_"^oth);
+                       Printf.fprintf fvh "  `define DEV_MAP__%s__BASE 'h%s\n" !refnam base;
+                       Printf.fprintf fh "  #define DEV_MAP__%s__BASE 0x%sllu\n" !refnam base;
                        end
                    else
                        begin
@@ -24,8 +26,8 @@ let rec iter lst =
                      | _, `Assoc lst -> iter lst
                      | _, `List lst -> iter (List.map (fun itm -> ("",itm)) lst)
                      | "size", `Int sz ->
-                        Printf.fprintf fvh "  `define DEV_MAP__io_ext_%s__MASK 'h%X\n" !refnam (sz-1);
-                        Printf.fprintf fh "  #define DEV_MAP__io_ext_%s__MASK 0x%Xllu\n" !refnam (sz-1);
+                        Printf.fprintf fvh "  `define DEV_MAP__%s__MASK 'h%X\n" !refnam (sz-1);
+                        Printf.fprintf fh "  #define DEV_MAP__%s__MASK 0x%Xllu\n" !refnam (sz-1);
                      | _, `Int n -> ()
                      | _, `Bool b -> ()
                      | _, `Float f -> ()

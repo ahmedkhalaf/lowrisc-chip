@@ -2,6 +2,7 @@
 
 `include "consts.vh"
 `include "config.vh"
+`timescale 1ns/1ps
 
 module tb;
 
@@ -181,26 +182,19 @@ module tb;
 `endif
 
 `ifdef ADD_FLASH
-   wire         flash_ss;
-   wire [3:0]   flash_io;
+   tri1         flash_ss;
+   tri1 [3:0]   flash_io;
 
-   assign flash_ss = 'bz;
-   assign flash_io = 'bzzzz;
 `endif
 
 `ifdef ADD_SPI
-   wire         spi_cs;
-   wire         spi_sclk;
-   wire         spi_mosi;
-   wire         spi_miso;
-   wire         sd_reset;
+   tri1         spi_cs;
+   tri1         spi_sclk;
+   tri1         spi_mosi;
+   tri1         spi_miso;
+   tri1         sd_reset;
 
-   assign spi_cs = 'bz;
-   assign spi_sclk = 'bz;
-   assign spi_mosi = 'bz;
-   assign spi_miso = 'bz;
-`endif //  `ifdef ADD_SPI
-
+`else
 `ifdef ADD_MINION_SD
 
    // 4-bit full SD interface
@@ -220,9 +214,7 @@ module tb;
 
    // LED and DIP switch
    wire [7:0]   o_led;
-   wire [3:0]   i_dip;
-
-   assign i_dip = 'bzzzz;
+   tri1 [3:0]   i_dip;
 
    // push button array
    wire         GPIO_SW_C;
@@ -251,7 +243,8 @@ module tb;
    wire [3:0]  VGA_BLUE_O;
    wire [3:0]  VGA_GREEN_O;
 
-`endif //  `ifdef FPGA
+`endif //  `ifdef MINION_SD
+`endif //  `ifdef ADD_SPI
 
 `ifndef VERILATOR
    // handle all run-time arguments
@@ -260,7 +253,7 @@ module tb;
    longint    unsigned max_cycle = 0;
    longint    unsigned cycle_cnt = 0;
 
-`ifndef ADD_PHY_DDR
+`ifdef ADD_MEMORY_LOAD
    initial begin
       #1.1;
       if($value$plusargs("load=%s", memfile))
@@ -273,18 +266,13 @@ module tb;
    end // initial begin
 
    // vcd
-   initial begin
-      if($test$plusargs("vcd"))
+   initial
+     begin
         vcd_name = "test.vcd";
-
-      $value$plusargs("vcd_name=%s", vcd_name);
-
-      if(vcd_name != "") begin
-         $dumpfile(vcd_name);
-         $dumpvars(0, DUT);
-         $dumpon;
-      end
-   end // initial begin
+        $dumpfile(vcd_name);
+        $dumpvars(0);
+        $dumpon;
+     end // initial begin
 
    always @(posedge clk) begin
       cycle_cnt = cycle_cnt + 1;

@@ -1,9 +1,9 @@
-#define DRAM_BASE 0x80000000
+#define BRAM_BASE 0x41000000
 
 .section .text.start, "ax", @progbits
 .globl _start
 _start:
-  li s0, DRAM_BASE
+  li s0, BRAM_BASE
   csrr a0, mhartid
   la a1, _dtb
   jr s0
