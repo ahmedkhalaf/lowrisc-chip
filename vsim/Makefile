@@ -14,7 +14,7 @@ default: sim
 base_dir = $(abspath ..)
 sim_dir = .
 output_dir = $(sim_dir)/output
-mem_gen = $(abspath ./vlsi_mem_gen)
+mem_gen = $(abspath ../scripts/vlsi_mem_gen)
 generated_dir = $(abspath ./generated-src)
 
 glip_dir = $(base_dir)/opensocdebug/glip/src
@@ -246,8 +246,8 @@ $(addprefix $(output_dir)/, $(addsuffix .riscv, $(asm_p_tests) $(asm_v_tests))):
 
 $(addprefix $(output_dir)/, $(addsuffix .riscv, $(bmarks_tests))):
 	mkdir -p $(output_dir)
-	$(MAKE) -C $(riscv_test_bmarks_dir) $(basename $(notdir $@))
-	ln -fs ../$(riscv_test_bmarks_dir)/$(basename $(notdir $@)) $@
+	$(MAKE) -C $(riscv_test_bmarks_dir) $(basename $(notdir $@)).riscv
+	ln -fs ../$(riscv_test_bmarks_dir)/$(basename $(notdir $@)).riscv $@
 
 $(addprefix $(output_dir)/, $(addsuffix .riscv, $(tag_tests))):
 	mkdir -p $(output_dir)
