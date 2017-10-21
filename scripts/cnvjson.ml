@@ -14,6 +14,7 @@ let rec iter lst =
                        let base = String.sub s (ix+1) (String.length s - ix - 1) in
                        refnam := (match String.map (function '-' -> '_' | oth -> oth) (String.sub s 0 ix) with
                          | "memory" -> "mem"
+                         | "serial" -> "io_ext_uart"
                          | oth -> "io_ext_"^oth);
                        Printf.fprintf fvh "  `define DEV_MAP__%s__BASE 'h%s\n" !refnam base;
                        Printf.fprintf fh "  #define DEV_MAP__%s__BASE 0x%sllu\n" !refnam base;

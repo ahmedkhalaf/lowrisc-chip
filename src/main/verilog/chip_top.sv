@@ -436,9 +436,8 @@ module chip_top
      #(
        .ID_WIDTH     ( `MEM_ID_WIDTH    ),
        .ADDR_WIDTH   ( `MEM_ADDR_WIDTH  ),
-       .DATA_WIDTH   ( `MEM_DATA_WIDTH  ),
-       .USER_WIDTH   ( 1                )
-       )
+       .DATA_WIDTH   ( `MEM_DATA_WIDTH  )
+      )
    dram_behav
      (
       .s_nasti_aclk    ( clk                       ),
@@ -515,20 +514,31 @@ module chip_top
 
 `ifdef ADD_BRAM
 
-   localparam BRAM_SIZE          = 16;        // 2^16 -> 64 KB
-   localparam BRAM_WIDTH         = 128;       // always 128-bit wide
-   localparam BRAM_LINE          = 2 ** BRAM_SIZE / (BRAM_WIDTH/8);
-   localparam BRAM_OFFSET_BITS   = $clog2(8);
-   localparam BRAM_ADDR_LSB_BITS = $clog2(BRAM_WIDTH / 64);
-   localparam BRAM_ADDR_BLK_BITS = BRAM_SIZE - BRAM_ADDR_LSB_BITS - BRAM_OFFSET_BITS;
-
-   initial assert (BRAM_OFFSET_BITS < 7) else $fatal(1, "Do not support BRAM AXI width > 64-bit!");
-
    // BRAM controller
    logic ram_clk, ram_rst, ram_en;
    logic [7:0] ram_we;
-   logic [BRAM_SIZE:0]                 ram_addr;
-   logic [63:0]   ram_wrdata, ram_rddata;
+   logic [15:0]   ram_addr, ram_addr_dly;
+   logic [63:0]   ram_wrdata;
+   logic [127:0]  ram_rddata, ram_rddata2;
+
+   // the inferred BRAMs
+   reg   [127:0]         ram [0 : 4095];
+
+   always @(posedge ram_clk)
+     begin
+        ram_addr_dly <= ram_addr;
+        if(ram_en) begin
+           foreach (ram_we[i])
+             if(ram_we[i]) ram[ram_addr[15:4]][(i+8*ram_addr[3])*8 +:8] = ram_wrdata[i*8 +: 8];
+           ram_rddata = ram[ram_addr[15:4]];
+        end
+    end
+
+`ifdef BOOT_MEM
+   initial $readmemh(`BOOT_MEM, ram);
+`else
+   initial $readmemh("boot.mem", ram);
+`endif
 
    axi_bram_ctrl_1 BramCtl
      (
@@ -575,42 +585,17 @@ module chip_top
       .bram_we_a       ( ram_we                    ),
       .bram_addr_a     ( ram_addr                  ),
       .bram_wrdata_a   ( ram_wrdata                ),
-      .bram_rddata_a   ( ram_rddata                )
+      .bram_rddata_a   ( ram_addr_dly[3] ? ram_rddata[127:64] : ram_rddata[63:0] )
       );
 
-   // the inferred BRAMs
-   reg   [BRAM_WIDTH-1:0]         ram [0 : BRAM_LINE-1];
-   logic [BRAM_ADDR_BLK_BITS-1:0] ram_block_addr, ram_block_addr_delay;
-   logic [BRAM_ADDR_LSB_BITS-1:0] ram_lsb_addr, ram_lsb_addr_delay;
-   logic [BRAM_WIDTH/8-1:0]       ram_we_full;
-   logic [BRAM_WIDTH-1:0]         ram_wrdata_full, ram_rddata_full;
-   int                            ram_rddata_shift, ram_we_shift;
-
-   assign ram_block_addr = ram_addr[BRAM_SIZE-1:0] >> BRAM_ADDR_LSB_BITS + BRAM_OFFSET_BITS;
-   assign ram_lsb_addr = ram_addr[BRAM_SIZE-1:0] >> BRAM_OFFSET_BITS;
-   assign ram_we_shift = ram_lsb_addr << BRAM_OFFSET_BITS; // avoid ISim error
-   assign ram_we_full = ram_we << ram_we_shift;
-   assign ram_wrdata_full = {(BRAM_WIDTH / `LOWRISC_IO_DAT_WIDTH){ram_wrdata}};
-
-   always @(posedge ram_clk)
-    begin
-     if(ram_en) begin
-        ram_block_addr_delay <= ram_block_addr;
-        ram_lsb_addr_delay <= ram_lsb_addr;
-        foreach (ram_we_full[i])
-          if(ram_we_full[i]) ram[ram_block_addr][i*8 +:8] <= ram_wrdata_full[i*8 +: 8];
-     end
-    end
-
-   assign ram_rddata_full = ram[ram_block_addr_delay];
-   assign ram_rddata_shift = ram_lsb_addr_delay << (BRAM_OFFSET_BITS + 3); // avoid ISim error
-   assign ram_rddata = ram_rddata_full >> ram_rddata_shift;
-
-`ifdef BOOT_MEM
-   initial $readmemh(`BOOT_MEM, ram);
-`else
-   initial $readmemh("boot.mem", ram);
-`endif
+ blk_mem_gen_0 boot_mem (
+  .clka(ram_clk),    // input wire clka
+  .ena(ram_en),      // input wire ena
+  .wea(ram_addr[3] ? {ram_we,8'b0} : {8'b0,ram_we} ),      // input wire [15 : 0] wea
+  .addra(ram_addr[15:4]),  // input wire [11 : 0] addra
+  .dina({ram_wrdata,ram_wrdata}), // input wire [127 : 0] dina
+  .douta(ram_rddata2) // output wire [127 : 0] douta
+);
 
 `endif //  `ifdef ADD_BRAM
 
@@ -1080,14 +1065,15 @@ module chip_top
    // IO memory crossbar
 
    wire                        dummy1, dummy2, dummy3, dummy4;
-
+/*
    nasti_channel
      #(
        .ID_WIDTH    ( `MMIO_MASTER_ID_WIDTH   ),
        .ADDR_WIDTH  ( `MMIO_MASTER_ADDR_WIDTH ),
        .DATA_WIDTH  ( `MMIO_MASTER_DATA_WIDTH ))
    io_master_nastix();      // IO nasti interface From Rocket
-
+*/
+   
 axi_crossbar_0 your_instance_name (
   .aclk(clk),                      // input wire aclk
   .aresetn(rstn),                // input wire aresetn
@@ -1099,15 +1085,15 @@ axi_crossbar_0 your_instance_name (
   .s_axi_arlock    ( io_master_nasti.ar_lock   ),
   .s_axi_arcache   ( io_master_nasti.ar_cache  ),
   .s_axi_arprot    ( io_master_nasti.ar_prot   ),
-  .s_axi_arready   ( io_master_nastix.ar_ready  ),
+  .s_axi_arready   ( io_master_nasti.ar_ready  ),
   .s_axi_arvalid   ( io_master_nasti.ar_valid  ),
   .s_axi_arqos     ( io_master_nasti.ar_qos    ),
-  .s_axi_rid       ( io_master_nastix.r_id      ),
-  .s_axi_rdata     ( io_master_nastix.r_data    ),
-  .s_axi_rresp     ( io_master_nastix.r_resp    ),
-  .s_axi_rlast     ( io_master_nastix.r_last    ),
-  .s_axi_rready    ( io_master_nastix.r_ready   ),
-  .s_axi_rvalid    ( io_master_nastix.r_valid   ),
+  .s_axi_rid       ( io_master_nasti.r_id      ),
+  .s_axi_rdata     ( io_master_nasti.r_data    ),
+  .s_axi_rresp     ( io_master_nasti.r_resp    ),
+  .s_axi_rlast     ( io_master_nasti.r_last    ),
+  .s_axi_rready    ( io_master_nasti.r_ready   ),
+  .s_axi_rvalid    ( io_master_nasti.r_valid   ),
   .s_axi_awid      ( io_master_nasti.aw_id     ),
   .s_axi_awaddr    ( {1'b0,io_master_nasti.aw_addr}  ),
   .s_axi_awlen     ( io_master_nasti.aw_len    ),
@@ -1116,18 +1102,18 @@ axi_crossbar_0 your_instance_name (
   .s_axi_awlock    ( io_master_nasti.aw_lock   ),
   .s_axi_awcache   ( io_master_nasti.aw_cache  ),
   .s_axi_awprot    ( io_master_nasti.aw_prot   ),
-  .s_axi_awready   ( io_master_nastix.aw_ready  ),
+  .s_axi_awready   ( io_master_nasti.aw_ready  ),
   .s_axi_awvalid   ( io_master_nasti.aw_valid  ),
   .s_axi_awqos     ( io_master_nasti.aw_qos    ),
-  .s_axi_wdata     ( io_master_nastix.w_data    ),
-  .s_axi_wstrb     ( io_master_nastix.w_strb    ),
-  .s_axi_wlast     ( io_master_nastix.w_last    ),
-  .s_axi_wready    ( io_master_nastix.w_ready   ),
-  .s_axi_wvalid    ( io_master_nastix.w_valid   ),
-  .s_axi_bid       ( io_master_nastix.b_id      ),
-  .s_axi_bresp     ( io_master_nastix.b_resp    ),
-  .s_axi_bready    ( io_master_nastix.b_ready   ),
-  .s_axi_bvalid    ( io_master_nastix.b_valid   ),
+  .s_axi_wdata     ( io_master_nasti.w_data    ),
+  .s_axi_wstrb     ( io_master_nasti.w_strb    ),
+  .s_axi_wlast     ( io_master_nasti.w_last    ),
+  .s_axi_wready    ( io_master_nasti.w_ready   ),
+  .s_axi_wvalid    ( io_master_nasti.w_valid   ),
+  .s_axi_bid       ( io_master_nasti.b_id      ),
+  .s_axi_bresp     ( io_master_nasti.b_resp    ),
+  .s_axi_bready    ( io_master_nasti.b_ready   ),
+  .s_axi_bvalid    ( io_master_nasti.b_valid   ),
   .m_axi_arid      ( {io_io_nasti.ar_id   , io_bram_nasti.ar_id   } ),
   .m_axi_araddr    ( {dummy1, io_io_nasti.ar_addr, dummy2, io_bram_nasti.ar_addr } ),
   .m_axi_arlen     ( {io_io_nasti.ar_len  , io_bram_nasti.ar_len  } ),
@@ -1179,8 +1165,7 @@ axi_crossbar_0 your_instance_name (
      #(
        .ID_WIDTH     ( `MEM_ID_WIDTH    ),
        .ADDR_WIDTH   ( `MEM_ADDR_WIDTH  ),
-       .DATA_WIDTH   ( `MEM_DATA_WIDTH  ),
-       .USER_WIDTH   ( 1                )
+       .DATA_WIDTH   ( `MEM_DATA_WIDTH  )
        )
    uram_behav
      (
@@ -1197,66 +1182,5 @@ axi_crossbar_0 your_instance_name (
       );
 
    assign uram_rddata = 'hC001F00D;
-
-   // Another Dummy BRAM controller
-   logic tmpram_clk, tmpram_rst, tmpram_en;
-   logic [`MEM_DATA_WIDTH/8-1:0] tmpram_we;
-   logic [15:0]                  tmpram_addr;
-   logic [`MEM_DATA_WIDTH-1:0]   tmpram_wrdata, tmpram_rddata;
-
-   nasti_bram_ctrl
-     #(
-       .ID_WIDTH     ( `MEM_ID_WIDTH    ),
-       .ADDR_WIDTH   ( `MEM_ADDR_WIDTH  ),
-       .DATA_WIDTH   ( `MEM_DATA_WIDTH  ),
-       .USER_WIDTH   ( 1                )
-       )
-   tmpram_behav
-     (
-      .s_nasti_aclk    ( clk                         ),
-      .s_nasti_aresetn ( rstn                        ),
-      .s_nasti         ( io_master_nasti             ),
-      .bram_rst        ( tmpram_rst                  ),
-      .bram_clk        ( tmpram_clk                  ),
-      .bram_en         ( tmpram_en                   ),
-      .bram_we         ( tmpram_we                   ),
-      .bram_addr       ( tmpram_addr                 ),
-      .bram_wrdata     ( tmpram_wrdata               ),
-      .bram_rddata     ( tmpram_rddata               )
-      );
-
-   // the inferred BRAMs
-   reg   [BRAM_WIDTH-1:0]         tmpram [0 : BRAM_LINE-1];
-   logic [BRAM_ADDR_BLK_BITS-1:0] tmpram_block_addr, tmpram_block_addr_delay;
-   logic [BRAM_ADDR_LSB_BITS-1:0] tmpram_lsb_addr, tmpram_lsb_addr_delay;
-   logic [BRAM_WIDTH/8-1:0]       tmpram_we_full;
-   logic [BRAM_WIDTH-1:0]         tmpram_wrdata_full, tmpram_rddata_full;
-   int                            tmpram_rddata_shift, tmpram_we_shift;
-
-   assign tmpram_block_addr = tmpram_addr[BRAM_SIZE-1:0] >> BRAM_ADDR_LSB_BITS + BRAM_OFFSET_BITS;
-   assign tmpram_lsb_addr = tmpram_addr[BRAM_SIZE-1:0] >> BRAM_OFFSET_BITS;
-   assign tmpram_we_shift = tmpram_lsb_addr << BRAM_OFFSET_BITS; // avoid ISim error
-   assign tmpram_we_full = tmpram_we << tmpram_we_shift;
-   assign tmpram_wrdata_full = {(BRAM_WIDTH / `LOWRISC_IO_DAT_WIDTH){tmpram_wrdata}};
-
-   always @(posedge tmpram_clk)
-    begin
-     if(tmpram_en) begin
-        tmpram_block_addr_delay <= tmpram_block_addr;
-        tmpram_lsb_addr_delay <= tmpram_lsb_addr;
-        foreach (tmpram_we_full[i])
-          if(tmpram_we_full[i]) tmpram[tmpram_block_addr][i*8 +:8] <= tmpram_wrdata_full[i*8 +: 8];
-     end
-    end
-
-   assign tmpram_rddata_full = tmpram[tmpram_block_addr_delay];
-   assign tmpram_rddata_shift = tmpram_lsb_addr_delay << (BRAM_OFFSET_BITS + 3); // avoid ISim error
-   assign tmpram_rddata = tmpram_rddata_full >> tmpram_rddata_shift;
-
-`ifdef BOOT_MEM
-   initial $readmemh(`BOOT_MEM, tmpram);
-`else
-   initial $readmemh("boot.mem", tmpram);
-`endif
-
+   
 endmodule // chip_top
